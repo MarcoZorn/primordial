@@ -46,9 +46,11 @@ class Population:
             for s in self.species:
                 if Genome.distance(g, s.rep, cfg) < cfg.compat_threshold:
                     s.members.append(g)
+                    g.species = s.id
                     break
             else:
                 self.species.append(Species(g))
+                g.species = self.species[-1].id
         self.species = [s for s in self.species if s.members]
         # keep the species count near target by nudging the threshold
         if len(self.species) > cfg.target_species:

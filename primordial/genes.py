@@ -56,6 +56,7 @@ class Genome:
         self.conns = conns or {}       # innov -> Conn
         self.fitness = 0.0
         self.adjusted = 0.0
+        self.species = 0
 
     # --- construction ---
 
