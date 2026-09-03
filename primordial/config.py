@@ -12,7 +12,7 @@ class Config:
     target_species: int = 12      # threshold auto-tunes towards this
 
     # speciation
-    compat_threshold: float = 3.0
+    compat_threshold: float = 1.2
     c_disjoint: float = 1.0
     c_weight: float = 0.5
     small_genome: int = 20

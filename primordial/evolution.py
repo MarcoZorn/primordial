@@ -54,9 +54,9 @@ class Population:
         self.species = [s for s in self.species if s.members]
         # keep the species count near target by nudging the threshold
         if len(self.species) > cfg.target_species:
-            cfg.compat_threshold += 0.1
+            cfg.compat_threshold += 0.15
         elif len(self.species) < cfg.target_species:
-            cfg.compat_threshold = max(0.5, cfg.compat_threshold - 0.1)
+            cfg.compat_threshold = max(0.3, cfg.compat_threshold - 0.15)
 
     def _cull(self):
         cfg = self.cfg
