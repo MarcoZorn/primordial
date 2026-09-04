@@ -35,6 +35,11 @@ class Config:
     energy_drain: float = 0.11
     toxin_cost: float = 0.09
     move_cost: float = 0.05
+    # a brain is expensive tissue - roughly a fifth of a human's resting budget
+    # goes to one. Without a price, networks bloat with neurons that do nothing
+    # and the cost lands on the simulation instead of the organism.
+    neuron_cost: float = 0.0006
+    synapse_cost: float = 0.00008
     max_age: int = 5000          # baseline; each organism inherits its own jitter
     lifespan_jitter: float = 0.18
 
@@ -80,6 +85,13 @@ class Config:
     weight_cap: float = 8.0
     p_add_conn: float = 0.09
     p_recurrent: float = 0.25      # share of new connections allowed to loop back
+    # duplication is how genomes actually get big; adding one neuron at a time
+    # grows linearly and can never reach a large brain
+    p_duplicate: float = 0.05
+    duplicate_share: float = 0.25  # fraction of the hidden layer copied at once
+    duplicate_jitter: float = 0.25
+    max_neurons: int = 3000        # a ceiling, not a target: past this a single
+                                   # brain costs more than the whole dish
     p_add_node: float = 0.025
     p_toggle: float = 0.01
     p_inherit_disabled: float = 0.75

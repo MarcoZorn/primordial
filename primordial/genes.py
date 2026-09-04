@@ -116,7 +116,9 @@ class Genome:
         if random.random() < cfg.p_add_conn:
             self.mutate_add_conn(innov, cfg)
         if random.random() < cfg.p_add_node:
-            self.mutate_add_node(innov)
+            self.mutate_add_node(innov, cfg.max_neurons)
+        if random.random() < cfg.p_duplicate:
+            self.mutate_duplicate(innov, cfg)
         if random.random() < cfg.p_toggle:
             self.mutate_toggle()
         return self
@@ -145,10 +147,10 @@ class Genome:
             self.add_conn(s, d, random.gauss(0, cfg.weight_init_std), innov)
             return
 
-    def mutate_add_node(self, innov):
+    def mutate_add_node(self, innov, cap=None):
         """Split a connection in two. The old one is disabled, not deleted."""
         live = [c for c in self.conns.values() if c.enabled]
-        if not live:
+        if not live or (cap is not None and len(self.nodes) >= cap):
             return
         old = random.choice(live)
         old.enabled = False
@@ -156,6 +158,39 @@ class Genome:
         self.nodes[new] = HIDDEN
         self.add_conn(old.src, new, 1.0, innov)
         self.add_conn(new, old.dst, old.w, innov)
+
+    def mutate_duplicate(self, innov, cfg):
+        """Copy a block of hidden neurons, wiring and all.
+
+        Adding one neuron at a time grows a brain linearly, which is far too
+        slow to ever reach a large network. Biology does not do that either:
+        genomes get big through duplication - whole genes, whole chromosomes,
+        whole genomes - and the copies then diverge because selection no longer
+        needs both to do the same job. Duplication makes size grow
+        geometrically, and it is the only mechanism here that can.
+        """
+        hidden = self.ids(HIDDEN)
+        if not hidden or len(self.nodes) >= cfg.max_neurons:
+            return
+        n = max(1, min(len(hidden), int(len(hidden) * cfg.duplicate_share) + 1))
+        block = set(random.sample(hidden, n))
+        twin = {}
+        for old in block:
+            new = innov.node()
+            self.nodes[new] = HIDDEN
+            twin[old] = new
+        jitter = cfg.duplicate_jitter
+        for c in list(self.conns.values()):
+            src_in, dst_in = c.src in block, c.dst in block
+            if not (src_in or dst_in):
+                continue
+            src = twin.get(c.src, c.src)
+            dst = twin.get(c.dst, c.dst)
+            if src == c.src and dst == c.dst:
+                continue
+            # no cycle check here: loops are legal in this network and the check
+            # is a graph walk per edge, which turns duplication quadratic
+            self.add_conn(src, dst, c.w * random.gauss(1.0, jitter), innov)
 
     def mutate_toggle(self):
         if self.conns:

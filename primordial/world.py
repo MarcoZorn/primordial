@@ -27,13 +27,18 @@ def n_inputs(cfg):
 class Organism:
     __slots__ = ("genome", "body", "brain", "st", "x", "y", "a", "v", "w",
                  "energy", "age", "alive", "sensors", "out", "gen", "eaten",
-                 "born", "lifespan", "chirp")
+                 "born", "lifespan", "chirp", "upkeep")
 
     def __init__(self, genome, body, x, y, a, energy, cfg, gen=0, lifespan=None):
         self.genome = genome
         self.body = body
         self.brain = Brain(genome)
         self.st = body.stats(cfg)
+        hidden = len(genome.nodes) - len(self.brain.inputs) - len(self.brain.bias) \
+            - len(self.brain.outputs)
+        self.upkeep = (self.st["drain"]
+                       + cfg.neuron_cost * max(0, hidden)
+                       + cfg.synapse_cost * len(self.brain.edges))
         self.x, self.y, self.a = x, y, a
         self.v = 0.0
         self.w = 0.0
@@ -64,6 +69,8 @@ class Organism:
             setattr(self, k, v)
         self.brain = Brain(self.genome)
         self.sensors = [0.0] * len(self.brain.inputs)
+        if not hasattr(self, "upkeep"):
+            self.upkeep = self.st["drain"]
 
 
 class _Husk:
@@ -387,7 +394,7 @@ class World:
             self.feed(o, near)
             self.bite(o, near)
 
-            o.energy -= o.st["drain"] + o.v * cfg.move_cost
+            o.energy -= o.upkeep + o.v * cfg.move_cost
             o.energy = min(o.energy, o.st["capacity"] * 2.0)
             o.age += 1
             if o.energy <= 0 or o.age > o.lifespan:

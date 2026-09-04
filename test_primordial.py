@@ -12,7 +12,7 @@ from primordial.config import Config
 from primordial.evolution import Speciator
 from primordial.genes import Genome, Innovations
 from primordial.store import load, save
-from primordial.world import N_OUTPUTS, World, n_inputs
+from primordial.world import N_OUTPUTS, Organism, World, n_inputs
 
 
 def genome(cfg, innov, n=40):
@@ -44,6 +44,39 @@ def test_every_node_is_evaluated_exactly_once():
             table = b.incoming if forward else b.recurrent
             assert (src, _) in [(s, w) for s, w in table.get(dst, [])], \
                 "every edge must be classified as forward or recurrent"
+
+
+def test_duplication_grows_brains_geometrically():
+    """One neuron at a time can never reach a large network. Duplication is the
+    only mutation here whose growth compounds."""
+    random.seed(5)
+    cfg, innov = Config(), Innovations()
+    cfg.p_duplicate = 0.0
+    slow = Genome.minimal(8, 2, innov, cfg)
+    for _ in range(400):
+        slow.mutate(innov, cfg)
+    random.seed(5)
+    cfg.p_duplicate = 0.05
+    fast = Genome.minimal(8, 2, innov, cfg)
+    for _ in range(400):
+        fast.mutate(innov, cfg)
+    assert len(fast.nodes) > len(slow.nodes) * 3, \
+        f"duplication should compound: {len(fast.nodes)} vs {len(slow.nodes)}"
+    assert len(fast.nodes) <= cfg.max_neurons
+
+
+def test_a_big_brain_costs_more_to_run():
+    """Neurons are expensive tissue. If thinking is free, networks bloat with
+    neurons that do nothing and the cost lands on the simulation."""
+    cfg = Config(start_pop=2)
+    w = World(cfg, seed=3)
+    w.seed_life(Innovations())
+    small = w.organisms[0]
+    big = w.organisms[1]
+    for _ in range(60):
+        big.genome.mutate_add_node(w.innov)
+    grown = Organism(big.genome, big.body, 0, 0, 0, 100.0, cfg)
+    assert grown.upkeep > small.upkeep, "a larger brain must cost more to run"
 
 
 def test_the_two_evaluation_paths_agree():

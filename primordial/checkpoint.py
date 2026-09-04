@@ -42,8 +42,31 @@ def load(path):
         state = pickle.load(fh)
     if state.get("version") != VERSION:
         raise ValueError(f"checkpoint version {state.get('version')} != {VERSION}")
+    _refresh_config(state)
     random.setstate(state["py_random"])
     return state
+
+
+def _refresh_config(state):
+    """Fill in config fields added since this checkpoint was written.
+
+    A run is meant to outlive many edits to the code. An old Config instance
+    unpickled into a newer engine is simply missing the new attributes, and the
+    first line that reads one crashes the run. Defaults are copied in; anything
+    already set is left exactly as it was.
+    """
+    from .config import Config
+    fresh = Config()
+    cfg = state.get("cfg") or getattr(state.get("world"), "cfg", None)
+    if cfg is None:
+        return
+    added = []
+    for name, value in vars(fresh).items():
+        if not hasattr(cfg, name):
+            setattr(cfg, name, value)
+            added.append(name)
+    if added:
+        print(f"checkpoint: filled in new config fields {', '.join(sorted(added))}")
 
 
 def newest(path):
