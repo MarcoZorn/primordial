@@ -211,6 +211,22 @@ def test_division_splits_energy_and_mutates():
     assert parent.energy + child.energy <= 500.0, "a split cannot create energy"
 
 
+def test_killing_the_same_organism_twice_changes_nothing():
+    """Several predators can reach a body in the tick it dies. Counting that
+    twice inflates the death toll and drops a second corpse, which creates
+    energy from nothing."""
+    cfg = Config(start_pop=3)
+    w = World(cfg, seed=5)
+    w.seed_life(Innovations())
+    o = w.organisms[0]
+    w.kill(o)
+    deaths, corpses = w.deaths, len(w.corpses)
+    w.kill(o)
+    w.kill(o)
+    assert w.deaths == deaths, "a dead organism must not die again"
+    assert len(w.corpses) == corpses, "a body must not leave two corpses"
+
+
 def test_a_corpse_never_returns_more_than_the_body_held():
     cfg = Config(start_pop=2)
     w = World(cfg, seed=9)

@@ -135,6 +135,12 @@ class World:
                 lifespan=self.jitter_lifespan(cfg.max_age)))
 
     def kill(self, o):
+        # idempotent on purpose: a dead organism stays in the list until the end
+        # of the tick, so several predators can reach it after it has already
+        # died. Counting that twice inflates the toll and, far worse, drops a
+        # second corpse - which quietly creates energy out of nothing.
+        if not o.alive:
+            return
         o.alive = False
         self.deaths += 1
         if len(self.corpses) < self.cfg.max_corpses:
@@ -372,6 +378,8 @@ class World:
         reach = o.st["reach"]
         for other, d in near:
             if not other.alive or d > reach + other.body.radius(cfg):
+                continue
+            if other.energy <= 0:
                 continue
             bite = cfg.bite_rate * eaters * (1.0 - other.st["armor"])
             bite = min(bite, other.energy)
