@@ -7,7 +7,7 @@ class Config:
     world_w: int = 4000
     world_h: int = 3000
     start_pop: int = 400
-    max_pop: int = 2500
+    max_pop: int = 1800
     neighbours: int = 24         # how many nearby things an organism can attend to
     seed: int = 7
 
@@ -46,10 +46,14 @@ class Config:
     n_rays: int = 6
     fov: float = 2.6
     bite_reach: float = 3.0
-    bite_rate: float = 3.2         # energy drained per eater cell per tick
+    bite_rate: float = 1.4         # energy drained per eater cell per tick
+    # only a fraction of what you drain becomes yours. Lindeman's law: real
+    # food chains lose about 90% per trophic level, which is exactly what stops
+    # predators from outnumbering the things they eat
+    bite_efficiency: float = 0.32
     # carrion must never be worth more than what died, or death becomes an
     # energy source and the dish runs away
-    corpse_keep: float = 0.75      # the rest is lost to decomposition
+    corpse_keep: float = 0.5       # the rest is lost to decomposition
     corpse_decay: float = 0.04     # rots away per tick
     max_corpses: int = 900
     # predation is expensive to run, which is what stops a bloom of eaters

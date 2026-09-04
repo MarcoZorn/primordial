@@ -376,8 +376,9 @@ class World:
             bite = cfg.bite_rate * eaters * (1.0 - other.st["armor"])
             bite = min(bite, other.energy)
             other.energy -= bite
-            # toxins hurt the diner, armour on the diner does not help
-            o.energy += bite * (1.0 - other.st["toxin"])
+            # most of what you take is lost in the eating; toxins hurt the
+            # diner, and armour on the diner does not help
+            o.energy += bite * cfg.bite_efficiency * (1.0 - other.st["toxin"])
             o.energy -= bite * other.st["toxin"]
             o.eaten += bite
             if other.energy <= 0 and other.body is not None:
