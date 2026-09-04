@@ -55,8 +55,12 @@ class App:
         alive = [o for o in self.world.organisms if o.alive]
         if not alive:
             return
-        o = min(alive, key=lambda o: (o.x - wx) ** 2 + (o.y - wy) ** 2)
-        if ((o.x - wx) ** 2 + (o.y - wy) ** 2) ** 0.5 < 60 / self.render.cam.zoom:
+        # nearest by surface, not centre, so clicking any cell of a big body works
+        def gap(o):
+            d = ((o.x - wx) ** 2 + (o.y - wy) ** 2) ** 0.5
+            return d - o.body.radius(self.cfg)
+        o = min(alive, key=gap)
+        if gap(o) < 24 / self.render.cam.zoom:
             self.sel = o
 
     def biggest(self):

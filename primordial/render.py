@@ -177,6 +177,7 @@ class Renderer:
         self.cam.track(sel)
         self.dish(world, sel)
         self.brain(sel)
+        self.legend(sel)
         self.stats(world, spec, sel, ui)
         if ui.get("overlay"):
             self.global_stats(world, spec)
@@ -259,7 +260,8 @@ class Renderer:
         pad = int(16 * cfg.ui_scale)
         self.text("ORGANISM", x0 + pad, pad, BRIGHT, self.fb)
         if o is None:
-            self.text("click something", x0 + pad, pad + self.lh * 2)
+            self.text("click an organism to watch its brain", x0 + pad,
+                      pad + self.lh * 2, DIM, self.fs)
             return
         b = o.brain
         st = o.st
@@ -273,7 +275,8 @@ class Renderer:
             self.text(r, x0 + pad, pad + self.lh * (1.4 + i * 0.95), TEXT, self.fs)
 
         top = pad + int(self.lh * 6)
-        bottom = cfg.view_h - int(28 * cfg.ui_scale)
+        legend_h = int(self.lh * 5.2)
+        bottom = cfg.view_h - legend_h - int(20 * cfg.ui_scale)
         cols = {}
         for node, d in b.depth.items():
             cols.setdefault(d, []).append(node)
@@ -283,7 +286,7 @@ class Renderer:
         for d, nodes in cols.items():
             nodes.sort()
             for i, node in enumerate(nodes):
-                x = x0 + lw + (cfg.panel_w - lw - int(56 * cfg.ui_scale)) * (d / maxd)
+                x = x0 + lw + (cfg.panel_w - lw - int(96 * cfg.ui_scale)) * (d / maxd)
                 y = top + (bottom - top) * ((i + 0.5) / len(nodes))
                 pos[node] = (x, y)
 
@@ -312,6 +315,25 @@ class Renderer:
                 x, y = pos[node]
                 self.text(name, x + int(10 * cfg.ui_scale), y - 7, BRIGHT, self.fs)
 
+    def legend(self, o):
+        """What the cell colours mean. Counts are for the selected organism."""
+        cfg = self.cfg
+        x0 = cfg.view_w
+        n = cfg.ui_scale
+        y = cfg.view_h - int(self.lh * 5.0)
+        pad = int(16 * n)
+        self.text("cell types", x0 + pad, y - int(self.lh * 0.9), DIM, self.fs)
+        order = (CORE, PHOTO, MOVER, EATER, SENSOR, ARMOR, STORE, TOXIN)
+        col_w = (cfg.panel_w - pad * 2) // 2
+        for i, kind in enumerate(order):
+            cx = x0 + pad + (i % 2) * col_w
+            cy = y + (i // 2) * self.lh
+            r = int(5 * n)
+            pygame.draw.circle(self.screen, CELL_COLOR[kind], (cx + r, int(cy + r + 2)), r)
+            count = o.body.count(kind) if o else 0
+            label = TYPE_NAME[kind] if not o else f"{TYPE_NAME[kind]} {count}"
+            self.text(label, cx + r * 3, cy, TEXT if count else DIM, self.fs)
+
     # --- stats ---
 
     def stats(self, world, spec, sel, ui):
@@ -331,22 +353,33 @@ class Renderer:
         for i, r in enumerate(rows):
             self.text(r, pad, y0 + pad + self.lh * (1.3 + i * 0.9), TEXT, self.fs)
 
-        gx = int(360 * cfg.ui_scale)
-        self.graph(ui.get("history", []), gx, y0 + pad, int(320 * cfg.ui_scale),
-                   cfg.stats_h - pad * 2)
-        self.species_bar(spec, gx + int(340 * cfg.ui_scale), y0 + pad,
-                         int(260 * cfg.ui_scale), cfg.stats_h - pad * 2)
-        ex = min(gx + int(620 * cfg.ui_scale), self.size[0] - int(700 * cfg.ui_scale))
+        # the toolbar owns the right edge; everything else shares what is left
+        free = self.size[0] - int(450 * cfg.ui_scale)
+        text_w = int(330 * cfg.ui_scale)
+        rest = max(240, free - text_w - pad * 3)
+        gw = int(rest * 0.42)
+        sw = int(rest * 0.28)
+        ew = rest - gw - sw
+        gh = cfg.stats_h - pad * 2
+        gx = text_w + pad
+        self.graph(ui.get("history", []), gx, y0 + pad, gw, gh)
+        sx = gx + gw + pad
+        self.species_bar(spec, sx, y0 + pad, sw, gh)
+        ex = sx + sw + pad
         self.text("events", ex, y0 + pad, DIM, self.fs)
         for i, (t, txt) in enumerate(reversed(world.log[-4:])):
-            self.text(f"{t:>7} {txt}", ex, y0 + pad + self.lh * (0.9 + i * 0.85), DIM, self.fs)
+            self.text(f"{t:>7} {txt}"[: max(8, int(ew / (8 * cfg.ui_scale)))],
+                      ex, y0 + pad + self.lh * (0.9 + i * 0.85), DIM, self.fs)
         if world.event:
-            self.text(world.event["kind"].upper(), ex, y0 + cfg.stats_h - self.lh - 6,
+            self.text(world.event["kind"].upper(), ex,
+                      y0 + cfg.stats_h - self.lh - int(10 * cfg.ui_scale),
                       (240, 170, 90), self.fb)
 
         hint = ("space pause  f speed  +/- zoom  0 fit  drag pan  c follow  "
                 "click select  g stats  F11 fullscreen  s save  q quit")
-        self.text(hint, pad, y0 + cfg.stats_h - int(18 * cfg.ui_scale), (92, 100, 118), self.fs)
+        self.text(hint[: max(20, int((self.size[0] - int(470 * cfg.ui_scale))
+                                     / (7.2 * cfg.ui_scale)))],
+                  pad, y0 + cfg.stats_h - int(18 * cfg.ui_scale), (92, 100, 118), self.fs)
         self.toolbar(y0, ui)
 
     def global_stats(self, world, spec):
