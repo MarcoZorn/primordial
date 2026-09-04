@@ -12,6 +12,7 @@ import time
 import pygame
 
 from . import checkpoint
+from .audio import ChirpAudio
 from .config import Config
 from .evolution import Speciator
 from .genes import Innovations
@@ -86,6 +87,8 @@ class Viewer:
         self.overlay = False
         self.filter = 0
         self.history = []
+        self.audio = ChirpAudio()
+        self.muted = False
 
     # --- attaching ---
 
@@ -221,6 +224,8 @@ class Viewer:
             self.fast = next_speed(self.fast)
         if e.key == pygame.K_g:
             self.overlay = not self.overlay
+        if e.key == pygame.K_m:
+            self.muted = not self.muted
         if e.key == pygame.K_v:
             self.filter = (self.filter + 1) % len(FILTERS)
         if e.key == pygame.K_c:
@@ -262,6 +267,8 @@ class Viewer:
             self.fast = next_speed(self.fast)
         elif hit == "stats":
             self.overlay = not self.overlay
+        elif hit.startswith("audio"):
+            self.muted = not self.muted
         elif hit == "best":
             self.go_to(self.most_evolved())
         elif hit == "plant":
@@ -295,12 +302,16 @@ class Viewer:
             if not self.world.organisms:
                 self.world.seed_life(self.innov)
                 self.world.note("reseeded - total extinction")
+            listener = (self.sel.x, self.sel.y) if self.sel else (
+                self.render.cam.x, self.render.cam.y)
+            self.audio.update(self.alive(), listener, self.cfg.hearing, self.muted)
             self.render.draw(self.world, self.spec, self.sel, {
                 "fast": self.fast if self.fast > 1 else 0,
                 "paused": self.paused, "history": self.history,
                 "overlay": self.overlay, "speed": self.fast,
                 "filter": FILTERS[self.filter],
                 "attached": self.checkpoint_tick,
+                "muted": self.muted,
             })
             self.clock.tick(60)
         pygame.quit()

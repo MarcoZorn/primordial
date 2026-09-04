@@ -194,12 +194,14 @@ class Renderer:
         x = self.button("+", x, y)
         x = self.button("fit", x, y, int(48 * n))
         y2 = y + int(32 * n)
-        x = self.size[0] - int(430 * n)
+        x = self.size[0] - int(460 * n)
         x = self.button("pause" if not ui.get("paused") else "resume", x, y2, int(96 * n),
                         on=bool(ui.get("paused")))
         x = self.button(f"speed x{ui.get('speed', 1)}", x, y2, int(126 * n),
                         on=ui.get("speed", 1) > 1)
         x = self.button("stats", x, y2, int(84 * n), on=bool(ui.get("overlay")))
+        muted = bool(ui.get("muted"))
+        self.button("audio:muted" if muted else "audio:on", x, y2, int(112 * n), on=muted)
 
     def text(self, s, x, y, col=TEXT, font=None):
         self.screen.blit((font or self.f).render(str(s), True, col), (x, y))
@@ -497,7 +499,7 @@ class Renderer:
                       (240, 170, 90), self.fb)
 
         hint = ("space pause  f speed  +/- zoom  0 fit  drag pan  c follow  "
-                "b best  p plant  a animal  v filter  g stats  F11 full  q quit")
+                "b best  p plant  a animal  v filter  g stats  m mute  F11 full  q quit")
         self.text(hint[: max(20, int((self.size[0] - int(470 * cfg.ui_scale))
                                      / (7.2 * cfg.ui_scale)))],
                   pad, y0 + cfg.stats_h - int(18 * cfg.ui_scale), (92, 100, 118), self.fs)
