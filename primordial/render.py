@@ -288,6 +288,7 @@ class Renderer:
             return
         ca, sa = math.cos(o.a), math.sin(o.a)
         step = cfg.cell_r * 2 * z
+        spots = []
         for (gx, gy), cell in o.body.cells.items():
             px, py = gx * step, gy * step
             x = sx + px * ca - py * sa
@@ -295,7 +296,20 @@ class Renderer:
             col = cell_color(cell)
             if dim:
                 col = (col[0] // 4 + 10, col[1] // 4 + 11, col[2] // 4 + 13)
-            pygame.draw.circle(self.screen, col, (int(x), int(y)), int(r))
+            spots.append((int(x), int(y), col))
+        # organisms sit on top of each other, so a multicellular body is only
+        # legible if its own cells are visibly joined to each other
+        if len(spots) > 1 and r > 2.5 and not dim:
+            link = (58, 66, 84) if not is_sel else BRIGHT
+            for i, (x, y, _) in enumerate(spots):
+                for x2, y2, _ in spots[i + 1:]:
+                    if (x - x2) ** 2 + (y - y2) ** 2 <= (step * 1.05) ** 2:
+                        pygame.draw.line(self.screen, link, (x, y), (x2, y2),
+                                         max(1, int(r * 0.5)))
+        for x, y, col in spots:
+            pygame.draw.circle(self.screen, col, (x, y), int(r))
+            if is_sel:
+                pygame.draw.circle(self.screen, BRIGHT, (x, y), int(r) + 1, 1)
         if o.chirp > 0.15:
             pygame.draw.circle(self.screen, (240, 220, 140), (int(sx), int(sy)),
                                int((o.body.radius(cfg) + 6 + 22 * o.chirp) * z), 1)

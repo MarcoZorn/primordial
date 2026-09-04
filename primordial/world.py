@@ -245,47 +245,93 @@ class World:
 
     # --- perception ---
 
-    def sense(self, o, neighbours):
+    def sense_all(self, things, dist, idx):
+        """Fill in every organism's senses in one vectorised pass.
+
+        Done per organism this was the single most expensive thing in the
+        simulation - a couple of million atan2 calls a second. The work is
+        identical, it just happens in numpy instead of in the interpreter.
+        """
         cfg = self.cfg
-        s = [0.0] * n_inputs(cfg)
-        sight = o.st["sight"]
+        orgs = self.organisms
+        n = len(orgs)
+        rays = cfg.n_rays
         half = cfg.fov / 2
-        wedge = cfg.fov / cfg.n_rays
-        ears = cfg.n_rays * 3
-        for other, d in neighbours:
-            if d < 1e-6 or d > max(sight, cfg.hearing):
-                continue
-            dx, dy = other.x - o.x, other.y - o.y
-            ang = (math.atan2(dy, dx) - o.a + math.pi) % (2 * math.pi) - math.pi
-            if abs(ang) > half:
-                continue
-            r = min(cfg.n_rays - 1, int((ang + half) / wedge))
-            if d <= sight:
-                prox = 1.0 - d / sight
-                base = r * 3
-                if prox > s[base]:
-                    s[base] = prox
-                    s[base + 1] = min(1.0, other.energy / 400.0)  # how rich it looks
-                    s[base + 2] = other.st["toxin"]               # how bad it tastes
-            # hearing does not need sensor cells, does not care about the dark,
-            # and carries further than sight
-            if d <= cfg.hearing and other.chirp > 0.0:
-                heard = other.chirp * (1.0 - d / cfg.hearing)
-                if heard > s[ears + r]:
-                    s[ears + r] = heard
-        b = cfg.n_rays * 4
-        s[b] = 1.0 - min(1.0, o.x / sight)
-        s[b + 1] = 1.0 - min(1.0, (cfg.world_w - o.x) / sight)
-        s[b + 2] = 1.0 - min(1.0, o.y / sight)
-        s[b + 3] = 1.0 - min(1.0, (cfg.world_h - o.y) / sight)
-        s[b + 4] = min(1.0, o.energy / o.st["capacity"])
-        s[b + 5] = min(1.0, o.age / o.lifespan)
+        wedge = cfg.fov / rays
+        width = n_inputs(cfg)
+        out = np.zeros((n, width))
+        if n == 0:
+            return out
+
+        px = np.fromiter((o.x for o in orgs), float, n)
+        py = np.fromiter((o.y for o in orgs), float, n)
+        pa = np.fromiter((o.a for o in orgs), float, n)
+        sight = np.fromiter((o.st["sight"] for o in orgs), float, n)
+
+        tx = np.fromiter((t.x for t in things), float, len(things))
+        ty = np.fromiter((t.y for t in things), float, len(things))
+        te = np.fromiter((t.energy for t in things), float, len(things))
+        tt = np.fromiter((t.st["toxin"] for t in things), float, len(things))
+        tc = np.fromiter((t.chirp for t in things), float, len(things))
+
+        nb = idx[:, 1:]                      # column 0 is the organism itself
+        d = dist[:, 1:]
+        dx = tx[nb] - px[:, None]
+        dy = ty[nb] - py[:, None]
+        ang = (np.arctan2(dy, dx) - pa[:, None] + np.pi) % (2 * np.pi) - np.pi
+
+        rows = np.repeat(np.arange(n), nb.shape[1])
+        ray = np.clip(((ang + half) / wedge).astype(np.int64), 0, rays - 1).ravel()
+        flat = rows * rays + ray
+        infield = (np.abs(ang) <= half).ravel() & np.isfinite(d).ravel()
+
+        # sight: keep, per ray, whatever is closest. Sorting by proximity and
+        # scattering in that order leaves the nearest thing written last.
+        seen = infield & (d <= sight[:, None]).ravel()
+        prox = np.where(seen, 1.0 - d.ravel() / np.repeat(sight, nb.shape[1]), 0.0)
+        order = np.argsort(prox[seen], kind="stable")
+        sel = np.nonzero(seen)[0][order]
+        near = np.zeros(n * rays)
+        rich = np.zeros(n * rays)
+        toxic = np.zeros(n * rays)
+        near[flat[sel]] = prox[sel]
+        rich[flat[sel]] = np.minimum(1.0, te[nb.ravel()[sel]] / 400.0)
+        toxic[flat[sel]] = tt[nb.ravel()[sel]]
+
+        # hearing needs no sensor cells, ignores the dark and carries further
+        chirp = tc[nb.ravel()]
+        audible = infield & (d.ravel() <= cfg.hearing) & (chirp > 0.0)
+        loud = np.where(audible, chirp * (1.0 - d.ravel() / cfg.hearing), 0.0)
+        order = np.argsort(loud[audible], kind="stable")
+        sel = np.nonzero(audible)[0][order]
+        heard = np.zeros(n * rays)
+        heard[flat[sel]] = loud[sel]
+
+        near = near.reshape(n, rays)
+        out[:, 0:rays * 3:3] = near
+        out[:, 1:rays * 3:3] = rich.reshape(n, rays)
+        out[:, 2:rays * 3:3] = toxic.reshape(n, rays)
+        out[:, rays * 3:rays * 4] = heard.reshape(n, rays)
+
+        b = rays * 4
+        out[:, b] = 1.0 - np.minimum(1.0, px / sight)
+        out[:, b + 1] = 1.0 - np.minimum(1.0, (cfg.world_w - px) / sight)
+        out[:, b + 2] = 1.0 - np.minimum(1.0, py / sight)
+        out[:, b + 3] = 1.0 - np.minimum(1.0, (cfg.world_h - py) / sight)
+        cap = np.fromiter((o.st["capacity"] for o in orgs), float, n)
+        age = np.fromiter((o.age for o in orgs), float, n)
+        life = np.fromiter((o.lifespan for o in orgs), float, n)
+        speed = np.fromiter((o.st["speed"] for o in orgs), float, n)
+        turn = np.fromiter((o.st["turn"] for o in orgs), float, n)
+        vel = np.fromiter((o.v for o in orgs), float, n)
+        spin = np.fromiter((o.w for o in orgs), float, n)
+        out[:, b + 4] = np.minimum(1.0, np.fromiter((o.energy for o in orgs), float, n) / cap)
+        out[:, b + 5] = np.minimum(1.0, age / life)
         # proprioception: knowing how fast you are already going and turning is
         # what lets a controller damp itself instead of oscillating
-        s[b + 6] = o.v / max(o.st["speed"], 1e-6) if o.st["speed"] else 0.0
-        s[b + 7] = max(-1.0, min(1.0, o.w / max(o.st["turn"], 1e-6)))
-        o.sensors = s
-        return s
+        out[:, b + 6] = np.where(speed > 0, vel / np.where(speed > 0, speed, 1.0), 0.0)
+        out[:, b + 7] = np.clip(spin / np.where(turn > 0, turn, 1.0), -1.0, 1.0)
+        return out
 
     # --- the tick ---
 
@@ -315,13 +361,15 @@ class World:
         self.maybe_event()
         orgs = self.organisms
         things, dist, idx = self.neighbourhood()
+        senses = self.sense_all(things, dist, idx).tolist()
         newborns = []
         for i, o in enumerate(orgs):
             if not o.alive:
                 continue
             near = [(things[j], d) for j, d in zip(idx[i][1:], dist[i][1:])
                     if things[j].alive and d != np.inf]
-            left, right, split, chirp = o.brain.step(self.sense(o, near))
+            o.sensors = senses[i]
+            left, right, split, chirp = o.brain.step(o.sensors)
             o.out = [left, right, split, chirp]
             o.chirp = max(0.0, chirp)
             if o.chirp:

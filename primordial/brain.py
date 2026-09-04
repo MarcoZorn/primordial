@@ -10,7 +10,14 @@ Activations are retained after each step so the UI can draw the network firing.
 """
 import math
 
+import numpy as np
+
 from .genes import BIAS, HIDDEN, INPUT, OUTPUT
+
+# below this many neurons a plain python loop beats numpy, because the call
+# overhead costs more than the arithmetic saves. Above it numpy wins by a mile,
+# which is what makes large brains affordable at all.
+VECTOR_THRESHOLD = 130
 
 
 def tanh(x):
@@ -24,8 +31,8 @@ class Brain:
         self.bias = genome.ids(BIAS)
         self.edges = [(c.src, c.dst, c.w) for c in genome.conns.values() if c.enabled]
         self.order = self._topo(genome)
-        self.act = {n: 0.0 for n in genome.nodes}
-        self.prev = dict(self.act)
+        self._act = {n: 0.0 for n in genome.nodes}
+        self.prev = dict(self._act)
         rank = {n: i for i, n in enumerate(self.order)}
         # split the edges once: anything pointing backwards through the order is
         # a memory edge and reads the previous tick
@@ -37,6 +44,9 @@ class Brain:
         self.loops = sum(len(v) for v in self.recurrent.values())
         self.depth = self._depths(genome)
         self._fixed = set(self.inputs) | set(self.bias)
+        self.vector = len(self.order) >= VECTOR_THRESHOLD
+        if self.vector:
+            self._compile()
 
     def _topo(self, genome):
         """Evaluation order. Inputs first, then Kahn's algorithm; whatever is
@@ -77,8 +87,83 @@ class Brain:
             depth[n] = 0
         return depth
 
+    @property
+    def act(self):
+        """Activations by node id. Only the UI wants this shape, so in the
+        vectorised path it is built on demand rather than every tick."""
+        if self.vector:
+            return {n: float(self._vals[i]) for n, i in self._pos.items()}
+        return self._act
+
+    def _compile(self):
+        """Lay the network out as flat arrays, grouped into evaluation levels.
+
+        Every node in a level depends only on earlier levels, so one level is
+        one scatter-add over all of its incoming edges at once.
+        """
+        pos = {n: i for i, n in enumerate(self.order)}
+        self._pos = pos
+        self._n = len(self.order)
+        self._in_idx = np.array([pos[n] for n in self.inputs], dtype=np.int64)
+        self._bias_idx = np.array([pos[n] for n in self.bias], dtype=np.int64)
+        self._out_idx = np.array([pos[n] for n in self.outputs], dtype=np.int64)
+
+        level = {n: 0 for n in self.order}
+        for n in self.order:
+            for src, _ in self.incoming.get(n, ()):
+                level[n] = max(level[n], level[src] + 1)
+        self.levels = []
+        edges = {}
+        for dst, ins in self.incoming.items():
+            for src, w in ins:
+                edges.setdefault(level[dst], []).append((pos[src], pos[dst], w))
+        # every non-input node has to be evaluated, including ones sitting at
+        # level 0 because their only inputs are recurrent - skipping those left
+        # them stuck at zero and silently changed what the network computed
+        nodes_at = {}
+        for n, lv in level.items():
+            if n not in self._fixed:
+                nodes_at.setdefault(lv, []).append(pos[n])
+        for lv in sorted(set(edges) | set(nodes_at)):
+            e = edges.get(lv, [])
+            self.levels.append((
+                np.array([x[0] for x in e], dtype=np.int64),
+                np.array([x[1] for x in e], dtype=np.int64),
+                np.array([x[2] for x in e], dtype=float),
+                np.array(sorted(nodes_at.get(lv, [])), dtype=np.int64),
+            ))
+        rec = [(pos[src], pos[dst], w)
+               for dst, ins in self.recurrent.items() for src, w in ins]
+        self._rec = (np.array([x[0] for x in rec], dtype=np.int64),
+                     np.array([x[1] for x in rec], dtype=np.int64),
+                     np.array([x[2] for x in rec], dtype=float))
+        self._vals = np.zeros(self._n)
+
+    def _step_vector(self, values):
+        v = self._vals
+        rs, rd, rw = self._rec
+        prev = v.copy() if rs.size else None
+        v[:] = 0.0
+        v[self._in_idx[:len(values)]] = values[:len(self._in_idx)]
+        v[self._bias_idx] = 1.0
+        carry = (np.bincount(rd, weights=prev[rs] * rw, minlength=self._n)
+                 if rs.size else None)
+        for src, dst, w, nodes in self.levels:
+            if src.size:
+                totals = np.bincount(dst, weights=v[src] * w, minlength=self._n)
+                if carry is not None:
+                    totals = totals + carry
+                if nodes.size:
+                    v[nodes] = np.tanh(np.clip(totals[nodes], -30.0, 30.0))
+            elif nodes.size:
+                v[nodes] = (np.tanh(np.clip(carry[nodes], -30.0, 30.0))
+                            if carry is not None else 0.0)
+        return v[self._out_idx].tolist()
+
     def step(self, values):
-        a = self.act
+        if self.vector:
+            return self._step_vector(np.asarray(values, dtype=float))
+        a = self._act
         self.prev = dict(a)
         prev = self.prev
         fixed = self._fixed

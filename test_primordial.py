@@ -46,6 +46,27 @@ def test_every_node_is_evaluated_exactly_once():
                 "every edge must be classified as forward or recurrent"
 
 
+def test_the_two_evaluation_paths_agree():
+    """Large brains are evaluated with numpy instead of a python loop. The two
+    must produce identical numbers, or the speedup silently changes the
+    simulation."""
+    cfg, innov = Config(), Innovations()
+    random.seed(11)
+    g = Genome.minimal(12, 3, innov, cfg)
+    while len(g.nodes) < 200:
+        g.mutate_add_node(innov)
+        if random.random() < 0.4:
+            g.mutate_add_conn(innov, cfg)
+    fast, slow = Brain(g), Brain(g)
+    assert fast.vector, "a 200 neuron brain should take the vectorised path"
+    slow.vector = False
+    x = [0.21, -0.4, 0.9, 0.0, 1.0, -0.7, 0.3, 0.5, -0.2, 0.8, 0.1, -0.9]
+    for _ in range(5):
+        a, b = fast.step(x), slow.step(x)
+        assert all(abs(p - q) < 1e-9 for p, q in zip(a, b)), \
+            "vectorised and python evaluation disagree"
+
+
 def test_recurrence_gives_the_network_memory():
     """A loop means the same input can produce different output over time."""
     cfg, innov = Config(), Innovations()
