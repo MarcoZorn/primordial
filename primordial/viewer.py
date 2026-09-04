@@ -20,6 +20,11 @@ from .store import save
 from .world import World
 
 FILTERS = ("all", "plants", "animals", "microbes", "chirping", "biggest brains")
+SPEEDS = (1, 4, 16, 32, 64)
+
+
+def next_speed(current):
+    return SPEEDS[(SPEEDS.index(current) + 1) % len(SPEEDS)] if current in SPEEDS else 1
 
 
 def matches(o, mode):
@@ -213,7 +218,7 @@ class Viewer:
         if e.key == pygame.K_SPACE:
             self.paused = not self.paused
         if e.key == pygame.K_f:
-            self.fast = {1: 4, 4: 16, 16: 1}[self.fast]
+            self.fast = next_speed(self.fast)
         if e.key == pygame.K_g:
             self.overlay = not self.overlay
         if e.key == pygame.K_v:
@@ -254,7 +259,7 @@ class Viewer:
         elif hit in ("pause", "resume"):
             self.paused = not self.paused
         elif hit.startswith("speed"):
-            self.fast = {1: 4, 4: 16, 16: 1}[self.fast]
+            self.fast = next_speed(self.fast)
         elif hit == "stats":
             self.overlay = not self.overlay
         elif hit == "best":
@@ -273,8 +278,11 @@ class Viewer:
         while self.events():
             self.maybe_resync()
             if not self.paused:
+                budget = time.monotonic() + 0.25
                 for _ in range(self.fast):
                     self.world.step()
+                    if time.monotonic() > budget:
+                        break
                 if self.world.tick % 120 == 0:
                     if self.path is None:
                         self.spec.update(self.world.organisms, self.world.tick)
