@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
 .venv/
-runs/
-*.json.gz
+# checkpoints are large binaries; the telemetry is the scientific record and is kept
+runs/**/state.pkl.gz
+runs/**/state.pkl.gz.prev
+runs/**/*.tmp
+runs/*.log

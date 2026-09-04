@@ -8,6 +8,9 @@ ranked or bred by the simulation. An organism has one problem — stay solvent
 long enough to divide — and every structure you see on screen is something that
 problem paid for.
 
+**[→ Live status of the ongoing run](LIVE.md)** — regenerated from telemetry
+while the run is going, not written by hand.
+
 ![primordial](docs/screenshot.png)
 
 ## What is actually being simulated
@@ -60,6 +63,21 @@ are logged in the UI.
 
     pip install pygame numpy scipy
     python run.py
+
+### A long run
+
+For anything longer than a sitting, the simulation runs headless in a daemon
+that owns the world and checkpoints itself, with a viewer you attach and detach
+at will:
+
+    python daemon.py --run runs/genesis     # start, or resume where it left off
+    python view.py   --run runs/genesis     # watch; close it whenever, the run continues
+    python status.py --run runs/genesis     # regenerate LIVE.md from telemetry
+
+The daemon checkpoints every 10,000 ticks and survives being killed: start it
+again on the same directory and it comes back as the same world, same
+organisms, same innovation numbers, same random stream. Stopping it with a
+signal makes it checkpoint before exiting, so pausing a run is safe.
 
 The window sizes itself to your display. Press the `speed` button a couple of
 times — real change takes tens of thousands of ticks.
