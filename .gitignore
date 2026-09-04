@@ -6,3 +6,7 @@ runs/**/state.pkl.gz
 runs/**/state.pkl.gz.prev
 runs/**/*.tmp
 runs/*.log
+runs/**/daemon.pid
+runs/**/viewer.pid
+runs/**/viewer.speed
+runs/watchdog.pid
