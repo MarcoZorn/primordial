@@ -71,7 +71,7 @@ class Config:
     view_h: int = 800
     panel_w: int = 440
     stats_h: int = 205
-    ui_scale: float = 1.0
+    ui_scale: float = 0.0        # 0 = pick from the desktop resolution
 
     # --- terrain and weather ---
     n_obstacles: int = 16

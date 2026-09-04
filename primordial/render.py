@@ -48,7 +48,7 @@ def act_color(v):
 class Camera:
     def __init__(self, cfg):
         self.cfg = cfg
-        self.zoom = min(cfg.view_w / cfg.world_w, cfg.view_h / cfg.world_h)
+        self.zoom = 2.2
         self.x = cfg.world_w / 2
         self.y = cfg.world_h / 2
         self.follow = None
@@ -77,6 +77,12 @@ class Camera:
         sx, sy = self.to_screen(wx, wy)
         return -pad <= sx <= self.cfg.view_w + pad and -pad <= sy <= self.cfg.view_h + pad
 
+    def fit(self):
+        self.zoom = min(self.cfg.view_w / self.cfg.world_w,
+                        self.cfg.view_h / self.cfg.world_h) * 0.98
+        self.x, self.y = self.cfg.world_w / 2, self.cfg.world_h / 2
+        self.follow = None
+
     def track(self, org):
         if self.follow and self.follow.alive:
             self.x += (self.follow.x - self.x) * 0.15
@@ -89,8 +95,28 @@ class Renderer:
         self.size = (cfg.view_w + cfg.panel_w, cfg.view_h + cfg.stats_h)
         self.screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
         pygame.display.set_caption("primordial")
+        self.fullscreen = False
         self.cam = Camera(cfg)
+        self.buttons = {}
         self.set_scale(cfg.ui_scale)
+
+    def resize(self, w, h):
+        cfg = self.cfg
+        self.size = (max(700, w), max(480, h))
+        cfg.panel_w = max(300, min(560, int(self.size[0] * 0.28)))
+        cfg.stats_h = max(150, min(260, int(self.size[1] * 0.22)))
+        cfg.view_w = self.size[0] - cfg.panel_w
+        cfg.view_h = self.size[1] - cfg.stats_h
+        self.screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
+
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            probe = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+            self.resize(*probe.get_size())
+            self.screen = pygame.display.set_mode(probe.get_size(), pygame.FULLSCREEN)
+        else:
+            self.resize(*self.size)
 
     def set_scale(self, s):
         self.cfg.ui_scale = max(0.6, min(2.6, s))
@@ -99,6 +125,43 @@ class Renderer:
         self.fb = pygame.font.SysFont("monospace", int(19 * n), bold=True)
         self.fs = pygame.font.SysFont("monospace", int(12 * n))
         self.lh = int(19 * n)
+
+    def button(self, label, x, y, w=None, on=False):
+        """Draw a clickable chip and remember where it landed."""
+        n = self.cfg.ui_scale
+        w = w or int(30 * n)
+        h = int(26 * n)
+        rect = pygame.Rect(int(x), int(y), w, h)
+        pygame.draw.rect(self.screen, (34, 39, 50) if not on else (58, 88, 140), rect)
+        pygame.draw.rect(self.screen, LINE, rect, 1)
+        surf = self.f.render(label, True, BRIGHT if on else TEXT)
+        self.screen.blit(surf, (rect.centerx - surf.get_width() // 2,
+                                rect.centery - surf.get_height() // 2))
+        self.buttons[label if not on else label] = rect
+        return rect.right + int(6 * n)
+
+    def toolbar(self, y0, ui):
+        n = self.cfg.ui_scale
+        self.buttons = {}
+        x = self.size[0] - int(430 * n)
+        y = y0 + int(12 * n)
+        self.text("text", x, y + int(4 * n), DIM, self.fs)
+        x += int(42 * n)
+        x = self.button("A-", x, y)
+        x = self.button("A+", x, y)
+        x += int(10 * n)
+        self.text("zoom", x, y + int(4 * n), DIM, self.fs)
+        x += int(50 * n)
+        x = self.button("-", x, y)
+        x = self.button("+", x, y)
+        x = self.button("fit", x, y, int(48 * n))
+        y2 = y + int(32 * n)
+        x = self.size[0] - int(430 * n)
+        x = self.button("pause" if not ui.get("paused") else "resume", x, y2, int(96 * n),
+                        on=bool(ui.get("paused")))
+        x = self.button(f"speed x{ui.get('speed', 1)}", x, y2, int(126 * n),
+                        on=ui.get("speed", 1) > 1)
+        x = self.button("stats", x, y2, int(84 * n), on=bool(ui.get("overlay")))
 
     def text(self, s, x, y, col=TEXT, font=None):
         self.screen.blit((font or self.f).render(str(s), True, col), (x, y))
@@ -109,6 +172,8 @@ class Renderer:
         self.dish(world, sel)
         self.brain(sel)
         self.stats(world, spec, sel, ui)
+        if ui.get("overlay"):
+            self.global_stats(world, spec)
         pygame.display.flip()
 
     # --- the dish ---
@@ -146,13 +211,13 @@ class Renderer:
         cfg = self.cfg
         z = self.cam.zoom
         sx, sy = self.cam.to_screen(o.x, o.y)
-        r = max(1.0, cfg.cell_r * z)
-        if r < 2.0:
+        r = max(1.5, cfg.cell_r * z)
+        if cfg.cell_r * z < 2.2:
             # too far out to draw cells - one dot, coloured by what it mostly is
             col = CELL_COLOR[PHOTO] if o.st["photo"] else (
                 CELL_COLOR[EATER] if o.st["eaters"] else CELL_COLOR[CORE])
             pygame.draw.circle(self.screen, col, (int(sx), int(sy)),
-                               max(1, int(o.body.radius(cfg) * z)))
+                               max(2, int(o.body.radius(cfg) * z)))
             return
         ca, sa = math.cos(o.a), math.sin(o.a)
         step = cfg.cell_r * 2 * z
@@ -265,7 +330,7 @@ class Renderer:
                    cfg.stats_h - pad * 2)
         self.species_bar(spec, gx + int(340 * cfg.ui_scale), y0 + pad,
                          int(260 * cfg.ui_scale), cfg.stats_h - pad * 2)
-        ex = gx + int(620 * cfg.ui_scale)
+        ex = min(gx + int(620 * cfg.ui_scale), self.size[0] - int(700 * cfg.ui_scale))
         self.text("events", ex, y0 + pad, DIM, self.fs)
         for i, (t, txt) in enumerate(reversed(world.log[-4:])):
             self.text(f"{t:>7} {txt}", ex, y0 + pad + self.lh * (0.9 + i * 0.85), DIM, self.fs)
@@ -273,15 +338,67 @@ class Renderer:
             self.text(world.event["kind"].upper(), ex, y0 + cfg.stats_h - self.lh - 6,
                       (240, 170, 90), self.fb)
 
-        hint = ("space pause  f fast  wheel zoom  drag pan  c follow  " 
-                "click select  [ ] text  s save  q quit")
+        hint = ("space pause  f speed  +/- zoom  0 fit  drag pan  c follow  "
+                "click select  g stats  F11 fullscreen  s save  q quit")
         self.text(hint, pad, y0 + cfg.stats_h - int(18 * cfg.ui_scale), (92, 100, 118), self.fs)
-        if ui.get("fast"):
-            self.text(f"FAST x{ui['fast']}", self.size[0] - int(120 * cfg.ui_scale),
-                      y0 + pad, ACCENT, self.fb)
-        if ui.get("paused"):
-            self.text("PAUSED", self.size[0] - int(120 * cfg.ui_scale),
-                      y0 + pad + self.lh, (240, 170, 90), self.fb)
+        self.toolbar(y0, ui)
+
+    def global_stats(self, world, spec):
+        """Everything about the dish at once. Toggled with g."""
+        cfg = self.cfg
+        w = int(cfg.view_w * 0.62)
+        h = int(cfg.view_h * 0.86)
+        x = (cfg.view_w - w) // 2
+        y = (cfg.view_h - h) // 2
+        pygame.draw.rect(self.screen, (10, 12, 16), (x, y, w, h))
+        pygame.draw.rect(self.screen, LINE, (x, y, w, h), 1)
+        c = world.census()
+        pad = int(22 * cfg.ui_scale)
+        self.text("GLOBAL STATS", x + pad, y + pad, BRIGHT, self.fb)
+        left = [
+            ("tick", c["tick"]),
+            ("organisms alive", c["pop"]),
+            ("plants", c["plant"]),
+            ("animals", c["animal"]),
+            ("microbes", c["microbe"]),
+            ("species", len(spec.species)),
+            ("births", c["births"]),
+            ("deaths", c["deaths"]),
+            ("deepest lineage", c["depth"]),
+        ]
+        right = [
+            ("avg cells", f"{c['mass']:.2f}"),
+            ("avg neurons", f"{c['neurons']:.1f}"),
+            ("avg synapses", f"{c['synapses']:.1f}"),
+            ("avg energy", f"{c['energy']:.0f}"),
+            ("largest body", f"{c['top_mass']} cells"),
+            ("largest brain", f"{c['top_neurons']} neurons"),
+            ("oldest", f"{c['top_age']} ticks"),
+            ("weather", c["event"] or "calm"),
+            ("compat threshold", f"{cfg.compat_threshold:.2f}"),
+        ]
+        top = y + pad + int(self.lh * 1.8)
+        for i, (k, v) in enumerate(left):
+            self.text(f"{k:<18}{v}", x + pad, top + i * self.lh, TEXT, self.f)
+        for i, (k, v) in enumerate(right):
+            self.text(f"{k:<18}{v}", x + w // 2, top + i * self.lh, TEXT, self.f)
+
+        cy = top + len(left) * self.lh + self.lh
+        self.text("cell census", x + pad, cy, BRIGHT, self.f)
+        cy += int(self.lh * 1.2)
+        total = sum(c["cells"].values()) or 1
+        bar_w = w - pad * 2
+        for name, n in sorted(c["cells"].items(), key=lambda kv: -kv[1]):
+            kind = next(k for k, v in TYPE_NAME.items() if v == name)
+            frac = n / total
+            self.text(f"{name:<8}{n:>6}  {frac * 100:5.1f}%", x + pad, cy, DIM, self.fs)
+            bx = x + pad + int(220 * cfg.ui_scale)
+            pygame.draw.rect(self.screen, CELL_COLOR[kind],
+                             (bx, cy + 4, max(1, int((bar_w - 240 * cfg.ui_scale) * frac)),
+                              int(10 * cfg.ui_scale)))
+            cy += self.lh
+
+        self.text("g to close", x + pad, y + h - int(28 * cfg.ui_scale), DIM, self.fs)
 
     def graph(self, hist, x, y, w, h):
         pygame.draw.rect(self.screen, BG, (x, y, w, h))

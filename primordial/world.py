@@ -290,15 +290,31 @@ class World:
     # --- readouts for the UI ---
 
     def census(self):
+        """Everything the dish knows about itself, in one dict."""
+        from .body import TYPE_NAME
         c = {"plant": 0, "animal": 0, "microbe": 0}
-        mass = neurons = gen = 0
+        cells = {name: 0 for name in TYPE_NAME.values()}
+        mass = neurons = syn = gen = 0
+        top_mass = top_neurons = top_age = 0
+        energy = 0.0
         for o in self.organisms:
             c[o.kingdom] += 1
             mass += o.body.mass
-            neurons += len(o.genome.nodes)
+            n, e = o.genome.complexity()
+            neurons += n
+            syn += e
+            energy += o.energy
             gen = max(gen, o.gen)
+            top_mass = max(top_mass, o.body.mass)
+            top_neurons = max(top_neurons, n)
+            top_age = max(top_age, o.age)
+            for kind in o.body.cells.values():
+                cells[TYPE_NAME[kind]] += 1
         n = max(len(self.organisms), 1)
-        c.update(pop=len(self.organisms), mass=mass / n,
-                 neurons=neurons / n, depth=gen,
-                 births=self.births, deaths=self.deaths)
+        c.update(tick=self.tick, pop=len(self.organisms),
+                 mass=mass / n, neurons=neurons / n, synapses=syn / n,
+                 depth=gen, energy=energy / n, cells=cells,
+                 top_mass=top_mass, top_neurons=top_neurons, top_age=top_age,
+                 births=self.births, deaths=self.deaths,
+                 event=self.event["kind"] if self.event else None)
         return c
