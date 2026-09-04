@@ -12,8 +12,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--run", default="runs/genesis")
     p.add_argument("--scale", type=float, default=0.0)
+    p.add_argument("--speed", type=int, default=4,
+                   help="ticks the local preview runs per frame")
     a = p.parse_args()
-    Viewer(run=a.run, scale=a.scale).run_forever()
+    v = Viewer(run=a.run, scale=a.scale)
+    v.fast = a.speed
+    v.run_forever()
 
 
 if __name__ == "__main__":

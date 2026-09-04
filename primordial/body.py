@@ -76,12 +76,21 @@ class Body:
                 return
 
     def _drift(self, cfg):
-        """Traits wander. This is where genuinely new cell kinds come from."""
+        """Traits wander. This is where genuinely new cell kinds come from.
+
+        A trait that is already expressed drifts both ways and can be lost. A
+        trait sitting at zero has to be switched on by a rarer mutation - if it
+        could simply drift up, every trait would creep upwards forever, because
+        zero is a floor and there is nowhere else to go.
+        """
         for cell in self.cells.values():
             for i in range(N_TRAITS):
-                if random.random() < cfg.p_trait:
-                    cell[i] = min(cfg.trait_cap,
-                                  max(0.0, cell[i] + random.gauss(0, cfg.trait_step)))
+                if cell[i] > 0.0:
+                    if random.random() < cfg.p_trait:
+                        cell[i] = min(cfg.trait_cap,
+                                      max(0.0, cell[i] + random.gauss(0, cfg.trait_step)))
+                elif random.random() < cfg.p_trait_new:
+                    cell[i] = random.uniform(0.05, 0.3)
 
     # --- what the body can do ---
 
@@ -116,7 +125,7 @@ class Body:
         cover = min(0.85, shell / m)
         # committing to predation shuts photosynthesis down; you are one or the
         # other, and part-way is worth part of each
-        autotrophy = max(0.0, 1.0 - bite * cfg.bite_blinds)
+        autotrophy = max(0.0, 1.0 - (bite / m) * cfg.bite_blinds)
         return {
             "mass": m,
             "movers": thrust,

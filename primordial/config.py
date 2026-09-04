@@ -30,7 +30,7 @@ class Config:
     season_swing: float = 0.55   # how much the fertile zone breathes
     drift_len: int = 260000      # ticks for the fertile zone to circle once
     drift_amp: float = 0.22      # how far it wanders, as a fraction of the world
-    shade_factor: float = 0.70     # how hard neighbours steal your light
+    shade_factor: float = 0.55     # how hard neighbours steal your light
     start_energy: float = 100.0
     energy_drain: float = 0.11
     toxin_cost: float = 0.09
@@ -88,11 +88,12 @@ class Config:
     # --- body mutation ---
     p_cell_add: float = 0.18
     p_cell_drop: float = 0.04
-    p_trait: float = 0.10          # chance each trait of each cell drifts
+    p_trait: float = 0.12          # chance an expressed trait drifts
+    p_trait_new: float = 0.015     # chance a dormant trait switches on
     trait_step: float = 0.14
     trait_cap: float = 1.6
     trait_cost: float = 0.055      # upkeep per unit of capability, anywhere
-    bite_blinds: float = 2.0       # how fast predation shuts photosynthesis off
+    bite_blinds: float = 1.5       # how fast predation shuts photosynthesis off
     max_cells: int = 64
 
     # --- speciation (labels and colours only, selection is what it is) ---

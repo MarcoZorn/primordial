@@ -532,7 +532,7 @@ class Renderer:
         top = max(max(r["pop"] for r in hist), 5)
         n = len(hist)
         series = (("pop", (150, 160, 185)), ("plant", CELL_COLOR[PHOTO]),
-                  ("animal", CELL_COLOR[EATER]))
+                  ("animal", CELL_COLOR[BITE]))
         for key, col in series:
             pts = [(x + w * i / (n - 1), y + h - 5 - (h - 22) * (r[key] / top))
                    for i, r in enumerate(hist)]

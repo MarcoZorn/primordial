@@ -135,6 +135,9 @@ def main():
     p.add_argument("--world", type=int, nargs=2, default=None)
     p.add_argument("--pop", type=int, default=None)
     p.add_argument("--max-pop", type=int, default=None)
+    p.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                   help="override a config value; applies to a resumed run too, "
+                        "which is how the world gets tuned without losing it")
     a = p.parse_args()
 
     signal.signal(signal.SIGTERM, _stop)
@@ -147,7 +150,17 @@ def main():
         cfg.start_pop = a.pop
     if a.max_pop:
         cfg.max_pop = a.max_pop
-    Run(a.run, cfg, fresh=a.fresh).loop(a.save_every, a.log_every, a.report_every)
+    run = Run(a.run, cfg, fresh=a.fresh)
+    for pair in a.set:
+        key, _, value = pair.partition("=")
+        if not hasattr(run.cfg, key):
+            raise SystemExit(f"no such config key: {key}")
+        old = getattr(run.cfg, key)
+        setattr(run.cfg, key, type(old)(value) if not isinstance(old, bool)
+                else value.lower() in ("1", "true", "yes"))
+        print(f"config {key}: {old} -> {getattr(run.cfg, key)}")
+        run.world.note(f"{key} {old} -> {getattr(run.cfg, key)}")
+    run.loop(a.save_every, a.log_every, a.report_every)
 
 
 if __name__ == "__main__":

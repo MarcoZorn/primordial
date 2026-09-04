@@ -135,13 +135,33 @@ def test_body_stats_respond_to_composition():
 
 
 def test_predation_shuts_off_photosynthesis():
-    """You are an autotroph or a heterotroph. Halfway is worth half of each."""
+    """You are an autotroph or a heterotroph, in proportion to your commitment.
+
+    What blinds you is the share of the body given over to predation, not the
+    raw amount - otherwise one cell drifting slightly predatory starves an
+    entire large organism.
+    """
     cfg = Config()
     plant = Body({(0, 0): blank(), (1, 0): _cell(PHOTO)})
-    hunter = Body({(0, 0): blank(), (1, 0): _cell(PHOTO), (2, 0): _cell(BITE)})
-    assert hunter.stats(cfg)["light"] < plant.stats(cfg)["light"]
-    assert hunter.stats(cfg)["light"] == 0.0, "a committed eater gets no light"
-    assert hunter.kingdom() == "animal"
+    dabbler = Body({(0, 0): blank(), (1, 0): _cell(PHOTO), (2, 0): _cell(BITE)})
+    committed = Body({(0, 0): blank(), (1, 0): _cell(BITE), (2, 0): _cell(BITE)})
+    assert dabbler.stats(cfg)["light"] < plant.stats(cfg)["light"]
+    assert dabbler.stats(cfg)["light"] > 0.0, "part-time predation is not blinding"
+    assert committed.stats(cfg)["light"] == 0.0, "a committed eater gets no light"
+    assert committed.kingdom() == "animal"
+
+
+def test_dormant_traits_do_not_creep_upwards():
+    """Clipping drift at zero would ratchet every trait up forever, because a
+    trait at zero can only move one way. Dormant traits must stay dormant."""
+    cfg = Config(p_trait=1.0, p_trait_new=0.0)
+    random.seed(7)
+    b = Body({(0, 0): _cell(PHOTO, 0.6)})
+    for _ in range(400):
+        b._drift(cfg)
+    cell = b.cells[(0, 0)]
+    assert all(cell[t] == 0.0 for t in range(N_TRAITS) if t != PHOTO), \
+        "a trait nothing switched on must not appear by drift alone"
 
 
 def test_capability_is_never_free():
