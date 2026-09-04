@@ -101,22 +101,28 @@ class Renderer:
         self.set_scale(cfg.ui_scale)
 
     def resize(self, w, h):
+        """Adopt a size SDL has already applied. Calling set_mode here would
+        destroy and recreate the window, which on wayland looks like a crash."""
         cfg = self.cfg
-        self.size = (max(700, w), max(480, h))
-        cfg.panel_w = max(300, min(560, int(self.size[0] * 0.28)))
-        cfg.stats_h = max(150, min(260, int(self.size[1] * 0.22)))
+        want = (max(700, w), max(480, h))
+        surf = pygame.display.get_surface()
+        if surf is not None and surf.get_size() == want:
+            self.screen = surf
+        else:
+            self.screen = pygame.display.set_mode(want, pygame.RESIZABLE)
+        self.size = self.screen.get_size()
+        cfg.panel_w = max(300, min(620, int(self.size[0] * 0.28)))
+        cfg.stats_h = max(150, min(300, int(self.size[1] * 0.22)))
         cfg.view_w = self.size[0] - cfg.panel_w
         cfg.view_h = self.size[1] - cfg.stats_h
-        self.screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
 
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
         if self.fullscreen:
-            probe = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-            self.resize(*probe.get_size())
-            self.screen = pygame.display.set_mode(probe.get_size(), pygame.FULLSCREEN)
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         else:
-            self.resize(*self.size)
+            self.screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
+        self.resize(*self.screen.get_size())
 
     def set_scale(self, s):
         self.cfg.ui_scale = max(0.6, min(2.6, s))

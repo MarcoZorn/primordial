@@ -40,8 +40,8 @@ class App:
     def fit_to_screen(self):
         """Open as large as the desktop comfortably allows."""
         info = pygame.display.Info()
-        w = int(info.current_w * 0.94)
-        h = int(info.current_h * 0.90)
+        w = int(info.current_w * 0.78)
+        h = int(info.current_h * 0.76)
         if not self.cfg.ui_scale:
             # a 900px-tall desktop is scale 1.0; HiDPI screens need much more
             self.cfg.ui_scale = max(1.0, min(3.0, info.current_h / 900.0))
@@ -68,8 +68,12 @@ class App:
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
                 return False
+            # x11 sends VIDEORESIZE, wayland sends WINDOWRESIZED; take either,
+            # and let resize() ignore it when the surface already matches
             if e.type == pygame.VIDEORESIZE:
                 self.render.resize(e.w, e.h)
+            elif e.type == pygame.WINDOWRESIZED:
+                self.render.resize(e.x, e.y)
             if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.toolbar(e.pos):
                 continue
             if e.type == pygame.MOUSEBUTTONDOWN:
