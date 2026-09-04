@@ -1,28 +1,28 @@
 # primordial — live run status
 
-**Run `genesis` · tick 3,000 · day 1 · 0.0 h of compute**
+**Run `genesis` · tick 141,000 · day 58 · 0.5 h of compute**
 
-_Updated 2026-09-04 01:44 UTC. Generated from telemetry by `status.py`; nothing here is written by hand._
+_Updated 2026-09-04 02:14 UTC. Generated from telemetry by `status.py`; nothing here is written by hand._
 
 ## Right now
 
 | | |
 |---|---|
-| organisms alive | **296** |
-| plants | 5 |
-| animals | 0 |
-| microbes | 291 |
-| species | 1 |
-| mean cells per body | 1.04 |
-| largest body | 2 cells |
-| mean neurons | 37.0 |
-| largest brain | 38 neurons |
-| deepest lineage | 2 generations |
-| oldest living | 3,000 ticks |
-| carrion | 3 |
-| chirping | 76 |
-| total births | 122 |
-| total deaths | 326 |
+| organisms alive | **729** |
+| plants | 692 |
+| animals | 37 |
+| microbes | 0 |
+| species | 8 |
+| mean cells per body | 2.56 |
+| largest body | 6 cells |
+| mean neurons | 38.3 |
+| largest brain | 41 neurons |
+| deepest lineage | 65 generations |
+| oldest living | 12,000 ticks |
+| carrion | 46 |
+| chirping | 299 |
+| total births | 24,719 |
+| total deaths | 130,972 |
 | weather | calm |
 | daylight | 0.68 |
 | resumes | 0 |
@@ -31,16 +31,16 @@ _Updated 2026-09-04 01:44 UTC. Generated from telemetry by `status.py`; nothing 
 
 | cell | count | share |
 |---|---|---|
-| core | 285 | 92.2% |
-| photo | 6 | 1.9% |
-| armor | 4 | 1.3% |
-| store | 4 | 1.3% |
-| digest | 4 | 1.3% |
-| mover | 3 | 1.0% |
-| sensor | 1 | 0.3% |
-| toxin | 1 | 0.3% |
-| shell | 1 | 0.3% |
-| eater | 0 | 0.0% |
+| photo | 1,596 | 85.5% |
+| store | 70 | 3.7% |
+| eater | 55 | 2.9% |
+| sensor | 48 | 2.6% |
+| mover | 31 | 1.7% |
+| armor | 20 | 1.1% |
+| toxin | 19 | 1.0% |
+| digest | 15 | 0.8% |
+| shell | 8 | 0.4% |
+| core | 5 | 0.3% |
 
 ## Milestones reached
 
@@ -48,47 +48,47 @@ _Updated 2026-09-04 01:44 UTC. Generated from telemetry by `status.py`; nothing 
 |---|---|
 | first photo cell | 1,000 |
 | first mover cell | 1,000 |
-| first eater cell | not yet |
+| first eater cell | 5,000 |
 | first sensor cell | 1,000 |
 | first toxin cell | 1,000 |
-| first 3-cell body | not yet |
+| first 3-cell body | 5,000 |
 | first 10-cell body | not yet |
 | first 25-cell body | not yet |
-| first animal | not yet |
+| first animal | 5,000 |
 | 50+ neuron brain | not yet |
 | 100+ neuron brain | not yet |
 
 ### population
 
 ```
-█  
-█  
-█  
-█  
-█  
-█ █
+                                        █       
+                                      ███   ██  
+                                █     ███  ███  
+                           ██   ███  █████ ███  
+                          █████ ████████████████
+   █                ██   ███████████████████████
 ```
 
 ### mean cells per body
 
 ```
-  █
-  █
-  █
-  █
-  █
-  █
+                          ████ ███              
+      █        ████ ████████████████████████████
+     ███  ██████████████████████████████████████
+ █ █████████████████████████████████████████████
+████████████████████████████████████████████████
+████████████████████████████████████████████████
 ```
 
 ### mean neurons
 
 ```
-  █
-  █
-  █
- ██
- ██
- ██
+                                          ██████
+                                       █████████
+                           █████████████████████
+                  █   ██ ███████████████████████
+           ███ █████████████████████████████████
+████    ████████████████████████████████████████
 ```
 
 ---
