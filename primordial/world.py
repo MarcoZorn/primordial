@@ -15,17 +15,19 @@ from .body import ARMOR, Body, EATER, MOVER, PHOTO, SENSOR, STORE, TOXIN
 from .brain import Brain
 from .genes import Genome
 
-N_OUTPUTS = 3          # left thruster, right thruster, urge to divide
+N_OUTPUTS = 4          # left thruster, right thruster, urge to divide, chirp
 
 
 def n_inputs(cfg):
-    return cfg.n_rays * 3 + 6
+    # per ray: what it sees (near, rich, toxic) and what it hears (chirp)
+    # then: 4 walls, energy, age, own speed, own turn rate
+    return cfg.n_rays * 4 + 8
 
 
 class Organism:
-    __slots__ = ("genome", "body", "brain", "st", "x", "y", "a", "v", "energy",
-                 "age", "alive", "sensors", "out", "gen", "eaten", "born",
-                 "lifespan")
+    __slots__ = ("genome", "body", "brain", "st", "x", "y", "a", "v", "w",
+                 "energy", "age", "alive", "sensors", "out", "gen", "eaten",
+                 "born", "lifespan", "chirp")
 
     def __init__(self, genome, body, x, y, a, energy, cfg, gen=0, lifespan=None):
         self.genome = genome
@@ -34,6 +36,8 @@ class Organism:
         self.st = body.stats(cfg)
         self.x, self.y, self.a = x, y, a
         self.v = 0.0
+        self.w = 0.0
+        self.chirp = 0.0
         self.energy = energy
         self.age = 0
         self.alive = True
@@ -49,6 +53,49 @@ class Organism:
     def kingdom(self):
         return self.body.kingdom()
 
+    # the network and the current sensor reading are both derived from state
+    # that is already saved, so a checkpoint does not carry them
+    def __getstate__(self):
+        return {k: getattr(self, k) for k in self.__slots__
+                if k not in ("brain", "sensors")}
+
+    def __setstate__(self, state):
+        for k, v in state.items():
+            setattr(self, k, v)
+        self.brain = Brain(self.genome)
+        self.sensors = [0.0] * len(self.brain.inputs)
+
+
+class _Husk:
+    """Stand-in body so a corpse can be treated like anything else in range."""
+
+    def __init__(self, mass):
+        self.mass = mass
+
+    def radius(self, cfg):
+        return cfg.cell_r * math.sqrt(self.mass)
+
+
+class Corpse:
+    """Dead biomass.
+
+    Heterotrophy has to start somewhere. Growing an eater cell switches off
+    photosynthesis for the whole body, so the first eater in a lineage is
+    normally a death sentence - it cannot hunt before it starves. Carrion is
+    the bridge: scavenging something that cannot run away is a far shorter
+    evolutionary step than hunting something that can.
+    """
+    __slots__ = ("x", "y", "energy", "alive", "st", "body", "age", "chirp")
+
+    def __init__(self, x, y, energy, mass):
+        self.x, self.y = x, y
+        self.energy = energy
+        self.alive = True
+        self.age = 0
+        self.st = {"toxin": 0.0, "armor": 0.0}
+        self.chirp = 0.0
+        self.body = _Husk(mass)
+
 
 class World:
     def __init__(self, cfg, seed=None):
@@ -61,6 +108,7 @@ class World:
         self.births = 0
         self.deaths = 0
         self.organisms = []
+        self.corpses = []
         self.innov = None      # set by the driver so ids stay consistent
         self.event = None
         self.log = []
@@ -77,11 +125,65 @@ class World:
         proto = Genome.minimal(n_inputs(cfg), N_OUTPUTS, innov, cfg)
         for _ in range(cfg.start_pop):
             g = proto.copy().mutate(innov, cfg)
+            ang = self.rng.uniform(0, 2 * math.pi)
+            rad = self.rng.uniform(0, cfg.seed_radius)
             self.organisms.append(Organism(
                 g, Body(),
-                self.rng.uniform(0, cfg.world_w), self.rng.uniform(0, cfg.world_h),
+                cfg.world_w / 2 * (1 + rad * math.cos(ang)),
+                cfg.world_h / 2 * (1 + rad * math.sin(ang)),
                 self.rng.uniform(0, 2 * math.pi), cfg.start_energy, cfg,
                 lifespan=self.jitter_lifespan(cfg.max_age)))
+
+    def kill(self, o):
+        o.alive = False
+        self.deaths += 1
+        if len(self.corpses) < self.cfg.max_corpses:
+            cfg = self.cfg
+            # a body can only give back what it took in and did not spend:
+            # unspent energy, plus what was invested in building its cells,
+            # minus what decomposition loses. Never more.
+            invested = cfg.cell_build * o.body.mass
+            left = (max(0.0, o.energy) + invested) * cfg.corpse_keep
+            self.corpses.append(Corpse(o.x, o.y, left, o.body.mass))
+
+    # --- the sky ---
+
+    @property
+    def daylight(self):
+        """Smooth day/night cycle. Nothing photosynthesises much at midnight."""
+        cfg = self.cfg
+        phase = math.cos(2 * math.pi * self.tick / cfg.day_len)
+        return cfg.night_light + (1.0 - cfg.night_light) * 0.5 * (1.0 + phase)
+
+    @property
+    def is_night(self):
+        return self.daylight < (1.0 + self.cfg.night_light) / 2
+
+    @property
+    def day(self):
+        return self.tick // self.cfg.day_len
+
+    def light_centre(self):
+        """The fertile zone wanders, so no patch of ground stays good forever."""
+        cfg = self.cfg
+        a = 2 * math.pi * self.tick / cfg.drift_len
+        return (cfg.world_w * (0.5 + cfg.drift_amp * math.cos(a)),
+                cfg.world_h * (0.5 + cfg.drift_amp * math.sin(a)))
+
+    def season(self):
+        """How tight the fertile zone is right now."""
+        cfg = self.cfg
+        swing = math.sin(2 * math.pi * self.tick / cfg.season_len)
+        return cfg.light_spread * (1.0 + cfg.season_swing * swing)
+
+    def light_at(self, x, y):
+        """Radial light field around the current fertile centre."""
+        cfg = self.cfg
+        cx, cy = self.light_centre()
+        dx = (x - cx) / (cfg.world_w / 2)
+        dy = (y - cy) / (cfg.world_h / 2)
+        return max(cfg.light_edge,
+                   math.exp(-(dx * dx + dy * dy) / max(0.02, self.season())))
 
     def jitter_lifespan(self, base):
         j = self.cfg.lifespan_jitter
@@ -116,9 +218,8 @@ class World:
             r = self.rng.uniform(*cfg.meteor_r)
             hit = 0
             for o in self.organisms:
-                if math.hypot(o.x - x, o.y - y) < r:
-                    o.alive = False
-                    self.deaths += 1
+                if o.alive and math.hypot(o.x - x, o.y - y) < r:
+                    self.kill(o)
                     hit += 1
             self.event = {"kind": kind, "left": 90, "light": 1.0, "x": x, "y": y, "r": r}
             self.note(f"meteor wiped {hit}")
@@ -144,27 +245,39 @@ class World:
         sight = o.st["sight"]
         half = cfg.fov / 2
         wedge = cfg.fov / cfg.n_rays
+        ears = cfg.n_rays * 3
         for other, d in neighbours:
-            if d > sight or d < 1e-6:
+            if d < 1e-6 or d > max(sight, cfg.hearing):
                 continue
             dx, dy = other.x - o.x, other.y - o.y
             ang = (math.atan2(dy, dx) - o.a + math.pi) % (2 * math.pi) - math.pi
             if abs(ang) > half:
                 continue
             r = min(cfg.n_rays - 1, int((ang + half) / wedge))
-            prox = 1.0 - d / sight
-            base = r * 3
-            if prox > s[base]:
-                s[base] = prox
-                s[base + 1] = min(1.0, other.energy / 400.0)   # how rich it looks
-                s[base + 2] = other.st["toxin"]                 # how bad it tastes
-        b = cfg.n_rays * 3
+            if d <= sight:
+                prox = 1.0 - d / sight
+                base = r * 3
+                if prox > s[base]:
+                    s[base] = prox
+                    s[base + 1] = min(1.0, other.energy / 400.0)  # how rich it looks
+                    s[base + 2] = other.st["toxin"]               # how bad it tastes
+            # hearing does not need sensor cells, does not care about the dark,
+            # and carries further than sight
+            if d <= cfg.hearing and other.chirp > 0.0:
+                heard = other.chirp * (1.0 - d / cfg.hearing)
+                if heard > s[ears + r]:
+                    s[ears + r] = heard
+        b = cfg.n_rays * 4
         s[b] = 1.0 - min(1.0, o.x / sight)
         s[b + 1] = 1.0 - min(1.0, (cfg.world_w - o.x) / sight)
         s[b + 2] = 1.0 - min(1.0, o.y / sight)
         s[b + 3] = 1.0 - min(1.0, (cfg.world_h - o.y) / sight)
         s[b + 4] = min(1.0, o.energy / o.st["capacity"])
         s[b + 5] = min(1.0, o.age / o.lifespan)
+        # proprioception: knowing how fast you are already going and turning is
+        # what lets a controller damp itself instead of oscillating
+        s[b + 6] = o.v / max(o.st["speed"], 1e-6) if o.st["speed"] else 0.0
+        s[b + 7] = max(-1.0, min(1.0, o.w / max(o.st["turn"], 1e-6)))
         o.sensors = s
         return s
 
@@ -177,15 +290,16 @@ class World:
         things closest to it, which is both cheap and closer to what a real
         sensor does than seeing every object in range.
         """
-        orgs = self.organisms
-        n = len(orgs)
-        pts = np.array([(o.x, o.y) for o in orgs]) if n else np.zeros((0, 2))
+        things = self.organisms + self.corpses
+        n = len(self.organisms)
+        m = len(things)
+        pts = np.array([(o.x, o.y) for o in things])
         tree = cKDTree(pts)
-        k = min(self.cfg.neighbours + 1, n)
-        dist, idx = tree.query(pts, k=k)
+        k = min(self.cfg.neighbours + 1, m)
+        dist, idx = tree.query(pts[:n], k=k)
         if k == 1:
             dist, idx = dist.reshape(n, 1), idx.reshape(n, 1)
-        return dist, idx
+        return things, dist, idx
 
     def step(self):
         cfg = self.cfg
@@ -194,19 +308,23 @@ class World:
             return
         self.maybe_event()
         orgs = self.organisms
-        dist, idx = self.neighbourhood()
+        things, dist, idx = self.neighbourhood()
         newborns = []
         for i, o in enumerate(orgs):
             if not o.alive:
                 continue
-            near = [(orgs[j], d) for j, d in zip(idx[i][1:], dist[i][1:])
-                    if orgs[j].alive and d != np.inf]
-            left, right, split = o.brain.step(self.sense(o, near))
-            o.out = [left, right, split]
+            near = [(things[j], d) for j, d in zip(idx[i][1:], dist[i][1:])
+                    if things[j].alive and d != np.inf]
+            left, right, split, chirp = o.brain.step(self.sense(o, near))
+            o.out = [left, right, split, chirp]
+            o.chirp = max(0.0, chirp)
+            if o.chirp:
+                o.energy -= cfg.chirp_cost * o.chirp
 
             speed = o.st["speed"]
             if speed:
-                o.a += (right - left) * o.st["turn"]
+                o.w = (right - left) * o.st["turn"]
+                o.a += o.w
                 o.v = max(0.0, min(speed, (left + right) / 2 * speed))
                 o.x = min(cfg.world_w, max(0.0, o.x + math.cos(o.a) * o.v))
                 o.y = min(cfg.world_h, max(0.0, o.y + math.sin(o.a) * o.v))
@@ -219,14 +337,18 @@ class World:
             o.energy = min(o.energy, o.st["capacity"] * 2.0)
             o.age += 1
             if o.energy <= 0 or o.age > o.lifespan:
-                o.alive = False
-                self.deaths += 1
+                self.kill(o)
                 continue
             if (split > 0 and o.energy >= o.st["capacity"] * cfg.split_energy
                     and len(self.organisms) + len(newborns) < cfg.max_pop):
                 newborns.append(self.divide(o, near))
 
         self.organisms = [o for o in self.organisms if o.alive] + newborns
+        for c in self.corpses:
+            c.energy -= self.cfg.corpse_decay * c.body.mass
+            if c.energy <= 0:
+                c.alive = False
+        self.corpses = [c for c in self.corpses if c.alive]
         self.births += len(newborns)
         self.tick += 1
 
@@ -236,8 +358,11 @@ class World:
         if light <= 0:
             return
         cfg = self.cfg
-        crowd = sum(other.body.mass for other, d in near if d < cfg.shade_radius)
-        o.energy += light * self.light_mult / (1.0 + cfg.shade_factor * crowd)
+        crowd = sum(other.body.mass for other, d in near
+                    if d < cfg.shade_radius and isinstance(other, Organism))
+        o.energy += (light * self.light_mult * self.daylight
+                     * self.light_at(o.x, o.y)
+                     / (1.0 + cfg.shade_factor * crowd))
 
     def bite(self, o, near):
         eaters = o.st["eaters"]
@@ -255,9 +380,8 @@ class World:
             o.energy += bite * (1.0 - other.st["toxin"])
             o.energy -= bite * other.st["toxin"]
             o.eaten += bite
-            if other.energy <= 0:
-                other.alive = False
-                self.deaths += 1
+            if other.energy <= 0 and other.body is not None:
+                self.kill(other)
             break
 
     def divide(self, o, near):
@@ -267,7 +391,8 @@ class World:
         genome = o.genome
         mate = None
         if self.rng.random() < cfg.p_sex:
-            options = [x for x, d in near if x.alive and d < cfg.mate_radius]
+            options = [x for x, d in near
+                       if x.alive and d < cfg.mate_radius and isinstance(x, Organism)]
             if options:
                 mate = self.rng.choice(options)
         child_genome = (Genome.crossover(genome, mate.genome, cfg) if mate
@@ -277,6 +402,8 @@ class World:
 
         share = o.energy * (1.0 - cfg.split_cost) / 2.0
         o.energy = share
+        # growing a body is not free, and a bigger child costs more to build
+        build = cfg.cell_build * child_body.mass
         o.born += 1
         a = self.rng.uniform(0, 2 * math.pi)
         d = o.body.radius(cfg) + cfg.cell_r * 2
@@ -284,8 +411,8 @@ class World:
             child_genome, child_body,
             min(cfg.world_w, max(0.0, o.x + math.cos(a) * d)),
             min(cfg.world_h, max(0.0, o.y + math.sin(a) * d)),
-            self.rng.uniform(0, 2 * math.pi), share, cfg, gen=o.gen + 1,
-            lifespan=self.jitter_lifespan(o.lifespan))
+            self.rng.uniform(0, 2 * math.pi), max(1.0, share - build), cfg,
+            gen=o.gen + 1, lifespan=self.jitter_lifespan(o.lifespan))
 
     # --- readouts for the UI ---
 
@@ -315,6 +442,9 @@ class World:
                  mass=mass / n, neurons=neurons / n, synapses=syn / n,
                  depth=gen, energy=energy / n, cells=cells,
                  top_mass=top_mass, top_neurons=top_neurons, top_age=top_age,
-                 births=self.births, deaths=self.deaths,
+                 corpses=len(self.corpses),
+                 chirping=sum(1 for o in self.organisms if o.chirp > 0.15),
+                 births=self.births, deaths=self.deaths, day=self.day,
+                 daylight=round(self.daylight, 3),
                  event=self.event["kind"] if self.event else None)
         return c

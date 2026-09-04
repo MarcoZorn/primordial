@@ -76,22 +76,26 @@ class Body:
             "reach": self.radius(cfg) + cfg.bite_reach * self.count(EATER),
             "sight": cfg.sight * (0.55 + 0.55 * self.count(SENSOR) / m),
             "armor": self.count(ARMOR) / m,
-            # the core feeds weakly on its own, so a lone cell can still live
-            "light": cfg.photo_rate * (photo + cfg.core_photo),
+            # you are an autotroph or a heterotroph, not both: growing a single
+            # eater cell shuts off photosynthesis for the whole body
+            "light": 0.0 if self.count(EATER) else
+                     cfg.photo_rate * (photo + cfg.core_photo),
             "capacity": cfg.start_energy * (1.0 + 0.9 * self.count(STORE)),
             "toxin": self.count(TOXIN) / m,
             # bigger bodies cost more to run, sublinearly - Kleiber's law
-            "drain": cfg.energy_drain * m ** 0.75 + cfg.toxin_cost * self.count(TOXIN),
+            "drain": (cfg.energy_drain * m ** 0.75
+                      + cfg.toxin_cost * self.count(TOXIN)
+                      + cfg.eater_cost * self.count(EATER)),
         }
 
     def radius(self, cfg):
         return cfg.cell_r * math.sqrt(self.mass)
 
     def kingdom(self):
-        """Purely a label for the UI - nothing in the sim branches on it."""
-        if self.count(EATER) and self.count(MOVER):
+        """A label for the UI, read off the body after the fact."""
+        if self.count(EATER):
             return "animal"
-        if self.count(PHOTO) and not self.count(MOVER):
+        if self.count(PHOTO):
             return "plant"
         return "microbe"
 

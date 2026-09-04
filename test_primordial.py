@@ -138,7 +138,21 @@ def test_division_splits_energy_and_mutates():
     child = w.divide(parent, [])
     assert child.gen == parent.gen + 1
     assert parent.energy < 500.0, "the parent pays for the split"
-    assert abs(child.energy - parent.energy) < 1e-9, "mitosis splits evenly"
+    assert child.energy <= parent.energy, "the child also pays to build its body"
+    assert parent.energy + child.energy <= 500.0, "a split cannot create energy"
+
+
+def test_a_corpse_never_returns_more_than_the_body_held():
+    cfg = Config(start_pop=2)
+    w = World(cfg, seed=9)
+    w.seed_life(Innovations())
+    o = w.organisms[0]
+    o.energy = 140.0
+    w.kill(o)
+    corpse = w.corpses[-1]
+    ceiling = o.energy + cfg.cell_build * o.body.mass
+    assert corpse.energy <= ceiling, "death must not create energy"
+    assert corpse.energy > 0
 
 
 def test_speciator_groups_and_clears():

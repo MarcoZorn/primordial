@@ -41,7 +41,7 @@ class Innovations:
         return self._split[conn_innov]
 
 
-@dataclass
+@dataclass(slots=True)
 class Conn:
     src: int
     dst: int

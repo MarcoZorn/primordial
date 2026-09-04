@@ -191,7 +191,8 @@ class Renderer:
         sc.set_clip((0, 0, cfg.view_w, cfg.view_h))
         tl = self.cam.to_screen(0, 0)
         br = self.cam.to_screen(cfg.world_w, cfg.world_h)
-        pygame.draw.rect(sc, (16, 19, 25), (tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]))
+        pygame.draw.rect(sc, (13, 15, 20), (tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]))
+        self.light_field(world)
         pygame.draw.rect(sc, LINE, (tl[0], tl[1], br[0] - tl[0], br[1] - tl[1]), 1)
 
         for ox, oy, orad in world.obstacles:
@@ -203,6 +204,10 @@ class Renderer:
             if o.alive and self.cam.visible(o.x, o.y):
                 self.organism(o, o is sel)
 
+        if world.is_night:
+            veil = pygame.Surface((cfg.view_w, cfg.view_h), pygame.SRCALPHA)
+            veil.fill((6, 10, 28, int(120 * (1.0 - world.daylight))))
+            sc.blit(veil, (0, 0))
         ev = world.event
         if ev and ev["kind"] == "meteor":
             x, y = self.cam.to_screen(ev["x"], ev["y"])
@@ -213,6 +218,25 @@ class Renderer:
         sc.set_clip(None)
         pygame.draw.line(sc, LINE, (cfg.view_w, 0), (cfg.view_w, cfg.view_h))
         pygame.draw.line(sc, LINE, (0, cfg.view_h), (self.size[0], cfg.view_h))
+
+    def light_field(self, world):
+        """Rings showing where the light is, dimmed by the day/night cycle."""
+        cfg = self.cfg
+        wx, wy = world.light_centre()
+        cx, cy = self.cam.to_screen(wx, wy)
+        day = world.daylight
+        rings = 18
+        span = math.sqrt(max(0.02, world.season()))
+        for i in range(rings, 0, -1):
+            f = i / rings
+            lit = math.exp(-(f * span * 2.2) ** 2 / max(0.02, world.season()))
+            v = 12 + int(52 * lit * day)
+            rx = cfg.world_w / 2 * span * 2.2 * f * self.cam.zoom
+            ry = rx
+            rect = pygame.Rect(0, 0, int(rx * 2), int(ry * 2))
+            rect.center = (int(cx), int(cy))
+            if rect.width > 2:
+                pygame.draw.ellipse(self.screen, (v, v + 2, v + 7), rect)
 
     def organism(self, o, is_sel):
         cfg = self.cfg
@@ -233,6 +257,9 @@ class Renderer:
             x = sx + px * ca - py * sa
             y = sy + px * sa + py * ca
             pygame.draw.circle(self.screen, CELL_COLOR[kind], (int(x), int(y)), int(r))
+        if o.chirp > 0.15:
+            pygame.draw.circle(self.screen, (240, 220, 140), (int(sx), int(sy)),
+                               int((o.body.radius(cfg) + 6 + 22 * o.chirp) * z), 1)
         if is_sel:
             pygame.draw.circle(self.screen, BRIGHT, (int(sx), int(sy)),
                                int(o.body.radius(cfg) * z + 6 * z + 3), 1)
@@ -303,7 +330,9 @@ class Renderer:
             names = []
             for i in range(cfg.n_rays):
                 names += [f"r{i} near", f"r{i} rich", f"r{i} toxic"]
-            names += ["wall L", "wall R", "wall U", "wall D", "energy", "age"]
+            names += [f"r{i} hear" for i in range(cfg.n_rays)]
+            names += ["wall L", "wall R", "wall U", "wall D", "energy", "age",
+                      "speed", "turning"]
             for node, name in zip(b.inputs, names):
                 x, y = pos[node]
                 self.text(name, x - int(70 * cfg.ui_scale), y - 7, DIM, self.fs)
@@ -311,7 +340,7 @@ class Renderer:
                 if node in pos:
                     x, y = pos[node]
                     self.text("bias", x - int(70 * cfg.ui_scale), y - 7, DIM, self.fs)
-            for node, name in zip(b.outputs, ["turn L", "turn R", "divide"]):
+            for node, name in zip(b.outputs, ["turn L", "turn R", "divide", "chirp"]):
                 x, y = pos[node]
                 self.text(name, x + int(10 * cfg.ui_scale), y - 7, BRIGHT, self.fs)
 
@@ -342,13 +371,23 @@ class Renderer:
         pygame.draw.rect(self.screen, PANEL, (0, y0, self.size[0], cfg.stats_h))
         c = world.census()
         pad = int(14 * cfg.ui_scale)
-        self.text(f"tick {world.tick}", pad, y0 + pad, BRIGHT, self.fb)
+        sun = "night" if world.is_night else "day"
+        self.text(f"day {world.day}  {sun}", pad, y0 + pad, BRIGHT, self.fb)
+        bar = int(120 * cfg.ui_scale)
+        by = y0 + pad + int(4 * cfg.ui_scale)
+        bx = pad + int(200 * cfg.ui_scale)
+        pygame.draw.rect(self.screen, BG, (bx, by, bar, int(12 * cfg.ui_scale)))
+        pygame.draw.rect(self.screen, (250, 215, 130) if not world.is_night
+                         else (90, 110, 190),
+                         (bx, by, int(bar * world.daylight), int(12 * cfg.ui_scale)))
         rows = [
+            f"tick    {c['tick']}",
             f"alive   {c['pop']}",
             f"plants  {c['plant']}   animals {c['animal']}   microbes {c['microbe']}",
             f"cells   {c['mass']:.2f} avg   neurons {c['neurons']:.1f} avg",
             f"species {len(spec.species)}   lineage depth {c['depth']}",
-            f"births  {c['births']}   deaths {c['deaths']}",
+            f"births  {c['births']}   deaths {c['deaths']}   carrion {c['corpses']}",
+            f"chirping {c['chirping']}",
         ]
         for i, r in enumerate(rows):
             self.text(r, pad, y0 + pad + self.lh * (1.3 + i * 0.9), TEXT, self.fs)

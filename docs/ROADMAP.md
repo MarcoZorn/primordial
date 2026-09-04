@@ -28,6 +28,28 @@ one appears is decided by the dish.
 **Stage 5 — instrumentation.** Cell-level rendering, live brain view, camera,
 global census, telemetry written to `runs/telemetry.jsonl`.
 
+## What actually caps open-endedness
+
+Three structural limits decide whether this system can keep producing genuinely
+new kinds of thing, or whether it plateaus. Everything else is decoration.
+
+**1. Cell types are a fixed list of eight.** Morphology can only ever
+recombine the same eight parts. Replacing the enum with an evolvable trait
+vector per cell — each cell carrying continuous values for photosynthesis,
+thrust, bite, sensitivity, toughness, storage, toxicity — makes the space of
+possible bodies genuinely open, and lets intermediate and hybrid cells exist.
+
+**2. The sensory interface is fixed.** Every organism has exactly the same 32
+inputs and 4 outputs no matter what its body is. A lineage cannot evolve a new
+sense. The deep fix is to derive the interface from the body: each SENSOR cell
+contributes its own input node, each MOVER its own output, so growing a body
+grows the brain's interface with it. This is the single most important change
+for open-endedness and the most invasive.
+
+**3. No recurrence, therefore no memory.** Networks are acyclic, so nothing can
+hold state between ticks. Every behaviour is a reflex. Sequence, anticipation,
+and anything resembling syntax are all impossible until this is lifted.
+
 ## Next, in order
 
 **Corpses and decomposition.** Dead organisms currently just vanish. Leaving
@@ -39,13 +61,20 @@ cannot hold state between ticks. Allowing recurrent connections gives it
 short-term memory — the precondition for anything resembling behaviour over
 time rather than reflex.
 
-**A signalling channel.** Add an output that emits a value and a sense that
-reads nearby emissions. Nothing about the channel means anything initially.
-Whether organisms come to use it consistently — and whether the same emission
-reliably changes another organism's behaviour — is measurable, and this is the
-first point where the word *communication* is defensible rather than
-decorative. This is a real, published result in the evolutionary robotics
-literature, not speculation.
+**A decoder for the signalling channel.** *(the channel itself now exists:
+a `chirp` output, per-ray hearing inputs, and a small energy cost to emit.)*
+The channel means nothing on its own — what matters is measuring whether it
+carries information. The instrument is mutual information between an
+organism's emission and the world state around it, and between an emission and
+what nearby organisms do next. If a chirp reliably precedes an escape
+manoeuvre, that is communication by an operational definition rather than a
+hopeful one. Evolved signalling — including deceptive signalling under
+competition — is a replicated result in evolutionary robotics, so this is a
+measurement problem, not a gamble.
+
+**An input channel the observer controls.** One extra sense wired to a value
+set from outside the simulation. Whether lineages evolve to exploit it is a
+real experiment, and it is the only honest version of "talking to them".
 
 **Sexual reproduction proper.** Currently a division sometimes borrows genes
 from a neighbour. Real mate choice, driven by the brain, would let sexual
