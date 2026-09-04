@@ -15,12 +15,12 @@ class Config:
     # everything in the dish is paid for out of light; nothing is free
     photo_rate: float = 2.4        # per photo cell, before daylight/field/shading
     core_photo: float = 0.30       # the bare core feeds a little on its own
-    shade_radius: float = 55.0
+    shade_radius: float = 78.0
     # light is not uniform: it is concentrated in the middle of the world, so
     # the centre is worth fighting over and the edges are marginal ground
     light_spread: float = 0.30   # smaller = tighter fertile zone
     light_edge: float = 0.04     # floor, so the rim is poor but not dead
-    seed_radius: float = 0.35    # founders start inside the fertile zone
+    seed_radius: float = 0.50    # founders start inside the fertile zone
 
     # the world is never stationary: a lineage tuned to today's conditions has
     # to keep paying attention, which is what stops the dish settling
@@ -30,7 +30,7 @@ class Config:
     season_swing: float = 0.55   # how much the fertile zone breathes
     drift_len: int = 260000      # ticks for the fertile zone to circle once
     drift_amp: float = 0.22      # how far it wanders, as a fraction of the world
-    shade_factor: float = 0.22     # how hard neighbours steal your light
+    shade_factor: float = 0.70     # how hard neighbours steal your light
     start_energy: float = 100.0
     energy_drain: float = 0.11
     toxin_cost: float = 0.09
