@@ -14,7 +14,7 @@ import time
 
 # bump whenever the genome, the body encoding or the sensory layout changes:
 # an old checkpoint restored into a new engine is silently wrong, not broken
-VERSION = 2
+VERSION = 3
 
 
 def save(path, world, spec, innov, extra=None):

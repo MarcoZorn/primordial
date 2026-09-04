@@ -7,6 +7,8 @@ the point: what a thing is made of is what it can do.
 import colorsys
 import math
 
+import numpy as np
+
 import pygame
 
 from .body import (ARMOR, BITE, CORE, DIGEST, N_TRAITS, PHOTO, SENSE,
@@ -254,7 +256,26 @@ class Renderer:
         pygame.draw.line(sc, LINE, (0, cfg.view_h), (self.size[0], cfg.view_h))
 
     def light_field(self, world):
-        """Rings showing where the light is, dimmed by the day/night cycle."""
+        """The actual state of the ground: bright where light is untouched,
+        dark where something has grazed it down."""
+        cfg = self.cfg
+        avail = world.capacity * world.reserve * world.daylight
+        v = np.clip(avail * 190.0, 0, 190).astype(np.uint8)
+        rgb = np.empty((world.gw, world.gh, 3), dtype=np.uint8)
+        # surfarray wants (x, y); the grid is stored (row, col)
+        t = v.T
+        rgb[:, :, 0] = np.minimum(255, 12 + t * 0.42)
+        rgb[:, :, 1] = np.minimum(255, 14 + t * 0.55)
+        rgb[:, :, 2] = np.minimum(255, 20 + t * 0.30)
+        patch = pygame.surfarray.make_surface(rgb)
+        tl = self.cam.to_screen(0, 0)
+        br = self.cam.to_screen(cfg.world_w, cfg.world_h)
+        w, h = int(br[0] - tl[0]), int(br[1] - tl[1])
+        if w > 1 and h > 1:
+            self.screen.blit(pygame.transform.smoothscale(patch, (w, h)), tl)
+
+    def _rings(self, world):
+        """Kept for reference: the old purely radial view of the light."""
         cfg = self.cfg
         wx, wy = world.light_centre()
         cx, cy = self.cam.to_screen(wx, wy)

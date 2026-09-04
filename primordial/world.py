@@ -20,8 +20,8 @@ N_OUTPUTS = 4          # left thruster, right thruster, urge to divide, chirp
 
 def n_inputs(cfg):
     # per ray: what it sees (near, rich, toxic) and what it hears (chirp)
-    # then: 4 walls, energy, age, own speed, own turn rate
-    return cfg.n_rays * 4 + 8
+    # then: 4 walls, energy, age, own speed, own turn rate, light underfoot
+    return cfg.n_rays * 4 + 9
 
 
 class Organism:
@@ -120,6 +120,11 @@ class World:
         self.event = None
         self.log = []
         self.neurons_total = 0
+        self.gw = max(4, int(cfg.world_w / cfg.patch_size))
+        self.gh = max(4, int(cfg.world_h / cfg.patch_size))
+        self.reserve = np.ones((self.gh, self.gw))
+        self.capacity = np.ones((self.gh, self.gw))
+        self._refresh_capacity()
         self.obstacles = [
             (self.rng.uniform(0, cfg.world_w), self.rng.uniform(0, cfg.world_h),
              self.rng.uniform(*cfg.obstacle_r))
@@ -190,14 +195,45 @@ class World:
         swing = math.sin(2 * math.pi * self.tick / cfg.season_len)
         return cfg.light_spread * (1.0 + cfg.season_swing * swing)
 
-    def light_at(self, x, y):
-        """Radial light field around the current fertile centre."""
+    def field_at(self, x, y):
+        """The radial fertile field: how good this ground is at its best."""
         cfg = self.cfg
         cx, cy = self.light_centre()
         dx = (x - cx) / (cfg.world_w / 2)
         dy = (y - cy) / (cfg.world_h / 2)
         return max(cfg.light_edge,
                    math.exp(-(dx * dx + dy * dy) / max(0.02, self.season())))
+
+    def _refresh_capacity(self):
+        """How much light each patch holds when untouched. Follows the fertile
+        zone as it drifts, so good ground moves and has to be found again."""
+        cfg = self.cfg
+        cx, cy = self.light_centre()
+        ys = (np.arange(self.gh) + 0.5) * cfg.patch_size
+        xs = (np.arange(self.gw) + 0.5) * cfg.patch_size
+        dx = (xs[None, :] - cx) / (cfg.world_w / 2)
+        dy = (ys[:, None] - cy) / (cfg.world_h / 2)
+        self.capacity = np.maximum(
+            cfg.light_edge,
+            np.exp(-(dx * dx + dy * dy) / max(0.02, self.season())))
+
+    def cell_of(self, x, y):
+        cfg = self.cfg
+        return (min(self.gh - 1, max(0, int(y / cfg.patch_size))),
+                min(self.gw - 1, max(0, int(x / cfg.patch_size))))
+
+    def light_at(self, x, y):
+        """What is actually available here right now: the ground's potential,
+        times how much of it has not already been eaten."""
+        gy, gx = self.cell_of(x, y)
+        return self.capacity[gy, gx] * self.reserve[gy, gx]
+
+    def regrow(self):
+        if self.tick % 240 == 0:
+            self._refresh_capacity()
+        r = self.reserve
+        r += self.cfg.light_regen * (1.0 - r)
+        np.clip(r, 0.0, 1.0, out=r)
 
     def jitter_lifespan(self, base):
         j = self.cfg.lifespan_jitter
@@ -339,6 +375,12 @@ class World:
         # what lets a controller damp itself instead of oscillating
         out[:, b + 6] = np.where(speed > 0, vel / np.where(speed > 0, speed, 1.0), 0.0)
         out[:, b + 7] = np.clip(spin / np.where(turn > 0, turn, 1.0), -1.0, 1.0)
+        # how much light is left underfoot. Knowing the level is not enough to
+        # forage - to tell whether you are heading somewhere better you have to
+        # compare it with what it was, which takes memory.
+        gy = np.clip((py / cfg.patch_size).astype(np.int64), 0, self.gh - 1)
+        gx = np.clip((px / cfg.patch_size).astype(np.int64), 0, self.gw - 1)
+        out[:, b + 8] = self.capacity[gy, gx] * self.reserve[gy, gx]
         return out
 
     # --- the tick ---
@@ -367,6 +409,7 @@ class World:
             self.tick += 1
             return
         self.maybe_event()
+        self.regrow()
         orgs = self.organisms
         things, dist, idx = self.neighbourhood()
         senses = self.sense_all(things, dist, idx).tolist()
@@ -423,9 +466,14 @@ class World:
         cfg = self.cfg
         crowd = sum(other.body.mass for other, d in near
                     if d < cfg.shade_radius and isinstance(other, Organism))
-        o.energy += (light * self.light_mult * self.daylight
-                     * self.light_at(o.x, o.y)
-                     / (1.0 + cfg.shade_factor * crowd))
+        gy, gx = self.cell_of(o.x, o.y)
+        here = self.capacity[gy, gx] * self.reserve[gy, gx]
+        gain = (light * self.light_mult * self.daylight * here
+                / (1.0 + cfg.shade_factor * crowd))
+        o.energy += gain
+        # you eat the patch you are standing on
+        self.reserve[gy, gx] = max(0.0, self.reserve[gy, gx]
+                                   - gain * cfg.light_drain / max(here, 1e-6))
 
     def bite(self, o, near):
         eaters = o.st["eaters"]

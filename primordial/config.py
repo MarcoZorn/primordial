@@ -22,6 +22,16 @@ class Config:
     light_edge: float = 0.04     # floor, so the rim is poor but not dead
     seed_radius: float = 0.50    # founders start inside the fertile zone
 
+    # Light is a local, exhaustible resource. Feeding in one spot draws that
+    # patch down and it recovers slowly, so standing still starves you no
+    # matter how bright the ground was when you arrived. This is the whole
+    # reason moving, sensing a gradient and remembering where you have already
+    # grazed are worth anything: without depletion the optimal strategy is to
+    # sit in the brightest spot forever, which needs no brain at all.
+    patch_size: float = 44.0     # world units per light cell
+    light_regen: float = 0.0022  # share of the shortfall recovered per tick
+    light_drain: float = 0.0015  # patch drawn down per unit of energy taken
+
     # the world is never stationary: a lineage tuned to today's conditions has
     # to keep paying attention, which is what stops the dish settling
     day_len: int = 2400          # ticks per day/night cycle
@@ -30,7 +40,7 @@ class Config:
     season_swing: float = 0.55   # how much the fertile zone breathes
     drift_len: int = 260000      # ticks for the fertile zone to circle once
     drift_amp: float = 0.22      # how far it wanders, as a fraction of the world
-    shade_factor: float = 0.55     # how hard neighbours steal your light
+    shade_factor: float = 0.25     # depletion now does most of the crowding
     start_energy: float = 100.0
     energy_drain: float = 0.11
     toxin_cost: float = 0.09

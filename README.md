@@ -47,9 +47,27 @@ an animal, and it can only survive by eating things that are evolving not to be
 eaten. The kingdom label in the UI is read off the body after the fact — nothing
 in the simulation branches on it.
 
-### The economy
+### Light is local and exhaustible
 
-All energy enters the world as light and every organism pays rent. A cell costs
+All energy enters the world as light, and light is not a background constant —
+it is a resource sitting on the ground in patches. Feeding draws the patch you
+are standing on down, and it recovers slowly. A patch supports one sessile
+organism for around 1,600 ticks and eight of them for around 200.
+
+This is the single most important rule in the simulation, because it is what
+makes a brain worth having. Without depletion the best possible strategy is to
+sit in the brightest spot and divide, which requires no perception, no
+movement, and no thought. With it, staying alive means finding ground that has
+not been grazed — which means moving, sensing a gradient, and comparing what is
+underfoot now with what it was a moment ago. That last part needs memory, and
+memory is what recurrent connections are for.
+
+Organisms are told how much light is under them. They are not told where more
+of it is.
+
+### The rest of the economy
+
+Every organism pays rent. A cell costs
 upkeep each tick, scaled sublinearly with body mass (Kleiber's law), so large
 bodies must earn their size. Photosynthesis is shaded by nearby neighbours, so
 crowding starves a patch and space itself becomes contested. Movement, toxins
