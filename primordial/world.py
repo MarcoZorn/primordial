@@ -1,137 +1,304 @@
-"""The environment the creatures are judged in.
+"""The dish. One continuous world, no generations, no resets.
 
-A dish with food and poison. Each creature sees through a fan of rays and
-drives itself with two thrusters. Eating food buys it more time alive, poison
-costs it. Fitness is food eaten plus a small reward for surviving, so the first
-generations - which cannot steer at all - still have a gradient to climb.
+Organisms feed, move, eat each other and divide whenever they can afford to.
+Nothing is scored and nothing is culled by the simulation: a lineage continues
+because its members kept paying their energy bill long enough to split. That is
+the whole selection mechanism.
 """
 import math
 import random
 
 import numpy as np
+from scipy.spatial import cKDTree
 
+from .body import ARMOR, Body, EATER, MOVER, PHOTO, SENSOR, STORE, TOXIN
 from .brain import Brain
+from .genes import Genome
 
-FOOD, POISON = 1, -1
+N_OUTPUTS = 3          # left thruster, right thruster, urge to divide
 
 
 def n_inputs(cfg):
-    return cfg.n_rays * 2 + 5
+    return cfg.n_rays * 3 + 6
 
 
-N_OUTPUTS = 2
+class Organism:
+    __slots__ = ("genome", "body", "brain", "st", "x", "y", "a", "v", "energy",
+                 "age", "alive", "sensors", "out", "gen", "eaten", "born",
+                 "lifespan")
 
-
-class Creature:
-    __slots__ = ("genome", "brain", "x", "y", "a", "v", "energy", "alive",
-                 "eaten", "poisoned", "age", "sensors", "out")
-
-    def __init__(self, genome, cfg, rng):
+    def __init__(self, genome, body, x, y, a, energy, cfg, gen=0, lifespan=None):
         self.genome = genome
+        self.body = body
         self.brain = Brain(genome)
-        self.x = rng.uniform(cfg.world_w * 0.2, cfg.world_w * 0.8)
-        self.y = rng.uniform(cfg.world_h * 0.2, cfg.world_h * 0.8)
-        self.a = rng.uniform(0, 2 * math.pi)
+        self.st = body.stats(cfg)
+        self.x, self.y, self.a = x, y, a
         self.v = 0.0
-        self.energy = cfg.start_energy
-        self.alive = True
-        self.eaten = 0
-        self.poisoned = 0
+        self.energy = energy
         self.age = 0
+        self.alive = True
+        self.gen = gen
+        self.eaten = 0.0
+        self.born = 0
+        # inherited with a wobble, so cohorts do not all die on the same tick
+        self.lifespan = lifespan or cfg.max_age
         self.sensors = [0.0] * n_inputs(cfg)
-        self.out = [0.0, 0.0]
+        self.out = [0.0] * N_OUTPUTS
 
     @property
-    def fitness(self):
-        return self.eaten * 10.0 - self.poisoned * 6.0 + self.age * 0.01
+    def kingdom(self):
+        return self.body.kingdom()
 
 
 class World:
-    def __init__(self, genomes, cfg, seed=None):
+    def __init__(self, cfg, seed=None):
         self.cfg = cfg
+        seed = cfg.seed if seed is None else seed
         self.rng = random.Random(seed)
-        self.np_rng = np.random.default_rng(seed)
+        random.seed(seed)          # mutation uses the module rng; pin it too
         self.tick = 0
-        self.creatures = [Creature(g, cfg, self.rng) for g in genomes]
-        n = cfg.n_food + cfg.n_poison
-        self.items = np.column_stack([
-            self.np_rng.uniform(0, cfg.world_w, n),
-            self.np_rng.uniform(0, cfg.world_h, n),
-        ])
-        self.kind = np.array([FOOD] * cfg.n_food + [POISON] * cfg.n_poison)
+        self.next_id = 0
+        self.births = 0
+        self.deaths = 0
+        self.organisms = []
+        self.innov = None      # set by the driver so ids stay consistent
+        self.event = None
+        self.log = []
+        self.obstacles = [
+            (self.rng.uniform(0, cfg.world_w), self.rng.uniform(0, cfg.world_h),
+             self.rng.uniform(*cfg.obstacle_r))
+            for _ in range(cfg.n_obstacles)
+        ]
+
+    def seed_life(self, innov):
+        """Everything starts as one undifferentiated cell with a random brain."""
+        self.innov = innov
+        cfg = self.cfg
+        proto = Genome.minimal(n_inputs(cfg), N_OUTPUTS, innov, cfg)
+        for _ in range(cfg.start_pop):
+            g = proto.copy().mutate(innov, cfg)
+            self.organisms.append(Organism(
+                g, Body(),
+                self.rng.uniform(0, cfg.world_w), self.rng.uniform(0, cfg.world_h),
+                self.rng.uniform(0, 2 * math.pi), cfg.start_energy, cfg,
+                lifespan=self.jitter_lifespan(cfg.max_age)))
+
+    def jitter_lifespan(self, base):
+        j = self.cfg.lifespan_jitter
+        return max(400.0, base * self.rng.gauss(1.0, j))
+
+    def clear_obstacles(self, o):
+        """Push an organism back out of anything solid it walked into."""
+        r = o.body.radius(self.cfg)
+        for ox, oy, orad in self.obstacles:
+            dx, dy = o.x - ox, o.y - oy
+            d = math.hypot(dx, dy)
+            if d < orad + r and d > 1e-6:
+                push = (orad + r - d) / d
+                o.x += dx * push
+                o.y += dy * push
+
+    # --- weather ---
+
+    def maybe_event(self):
+        cfg = self.cfg
+        if self.event:
+            self.event["left"] -= 1
+            if self.event["left"] <= 0:
+                self.event = None
+            return
+        if self.rng.random() > cfg.p_event:
+            return
+        kind = self.rng.choice(("drought", "bloom", "meteor"))
+        if kind == "meteor":
+            x = self.rng.uniform(0, cfg.world_w)
+            y = self.rng.uniform(0, cfg.world_h)
+            r = self.rng.uniform(*cfg.meteor_r)
+            hit = 0
+            for o in self.organisms:
+                if math.hypot(o.x - x, o.y - y) < r:
+                    o.alive = False
+                    self.deaths += 1
+                    hit += 1
+            self.event = {"kind": kind, "left": 90, "light": 1.0, "x": x, "y": y, "r": r}
+            self.note(f"meteor wiped {hit}")
+            return
+        light = 0.35 if kind == "drought" else 1.9
+        self.event = {"kind": kind, "left": self.rng.randint(*cfg.event_len),
+                      "light": light}
+        self.note(kind)
+
+    def note(self, text):
+        self.log.append((self.tick, text))
+        del self.log[:-40]
 
     @property
-    def done(self):
-        return self.tick >= self.cfg.ticks or not any(c.alive for c in self.creatures)
+    def light_mult(self):
+        return self.event["light"] if self.event else 1.0
 
-    def _respawn(self, i):
-        self.items[i] = (self.np_rng.uniform(0, self.cfg.world_w),
-                         self.np_rng.uniform(0, self.cfg.world_h))
+    # --- perception ---
 
-    def sense(self, c):
-        """Fan of rays. Each ray reports the nearest food and nearest poison
-        inside its wedge, as proximity in 0..1. Plus walls, energy and speed."""
+    def sense(self, o, neighbours):
         cfg = self.cfg
-        d = self.items - (c.x, c.y)
-        dist = np.hypot(d[:, 0], d[:, 1])
-        near = dist < cfg.sight
-        out = [0.0] * n_inputs(cfg)
-        if near.any():
-            ang = (np.arctan2(d[near, 1], d[near, 0]) - c.a + math.pi) % (2 * math.pi) - math.pi
-            inside = np.abs(ang) < cfg.fov / 2
-            if inside.any():
-                ray = ((ang[inside] + cfg.fov / 2) / (cfg.fov / cfg.n_rays)).astype(int)
-                ray = np.clip(ray, 0, cfg.n_rays - 1)
-                prox = 1.0 - dist[near][inside] / cfg.sight
-                kinds = self.kind[near][inside]
-                for r, p, k in zip(ray, prox, kinds):
-                    slot = r * 2 + (0 if k == FOOD else 1)
-                    if p > out[slot]:
-                        out[slot] = float(p)
-        b = cfg.n_rays * 2
-        out[b] = 1.0 - min(1.0, c.x / cfg.sight)
-        out[b + 1] = 1.0 - min(1.0, (cfg.world_w - c.x) / cfg.sight)
-        out[b + 2] = 1.0 - min(1.0, c.y / cfg.sight)
-        out[b + 3] = 1.0 - min(1.0, (cfg.world_h - c.y) / cfg.sight)
-        out[b + 4] = min(1.0, c.energy / cfg.start_energy)
-        c.sensors = out
-        return out
+        s = [0.0] * n_inputs(cfg)
+        sight = o.st["sight"]
+        half = cfg.fov / 2
+        wedge = cfg.fov / cfg.n_rays
+        for other, d in neighbours:
+            if d > sight or d < 1e-6:
+                continue
+            dx, dy = other.x - o.x, other.y - o.y
+            ang = (math.atan2(dy, dx) - o.a + math.pi) % (2 * math.pi) - math.pi
+            if abs(ang) > half:
+                continue
+            r = min(cfg.n_rays - 1, int((ang + half) / wedge))
+            prox = 1.0 - d / sight
+            base = r * 3
+            if prox > s[base]:
+                s[base] = prox
+                s[base + 1] = min(1.0, other.energy / 400.0)   # how rich it looks
+                s[base + 2] = other.st["toxin"]                 # how bad it tastes
+        b = cfg.n_rays * 3
+        s[b] = 1.0 - min(1.0, o.x / sight)
+        s[b + 1] = 1.0 - min(1.0, (cfg.world_w - o.x) / sight)
+        s[b + 2] = 1.0 - min(1.0, o.y / sight)
+        s[b + 3] = 1.0 - min(1.0, (cfg.world_h - o.y) / sight)
+        s[b + 4] = min(1.0, o.energy / o.st["capacity"])
+        s[b + 5] = min(1.0, o.age / o.lifespan)
+        o.sensors = s
+        return s
+
+    # --- the tick ---
+
+    def neighbourhood(self):
+        """Nearest-k neighbours for everyone, in one C-speed pass.
+
+        Attention is deliberately capped: an organism reacts to the handful of
+        things closest to it, which is both cheap and closer to what a real
+        sensor does than seeing every object in range.
+        """
+        orgs = self.organisms
+        n = len(orgs)
+        pts = np.array([(o.x, o.y) for o in orgs]) if n else np.zeros((0, 2))
+        tree = cKDTree(pts)
+        k = min(self.cfg.neighbours + 1, n)
+        dist, idx = tree.query(pts, k=k)
+        if k == 1:
+            dist, idx = dist.reshape(n, 1), idx.reshape(n, 1)
+        return dist, idx
 
     def step(self):
         cfg = self.cfg
-        for c in self.creatures:
-            if not c.alive:
+        if not self.organisms:
+            self.tick += 1
+            return
+        self.maybe_event()
+        orgs = self.organisms
+        dist, idx = self.neighbourhood()
+        newborns = []
+        for i, o in enumerate(orgs):
+            if not o.alive:
                 continue
-            left, right = c.brain.step(self.sense(c))
-            c.out = [left, right]
-            c.a += (right - left) * cfg.turn_rate
-            c.v = max(0.0, min(cfg.max_speed, (left + right) / 2 * cfg.max_speed))
-            c.x = min(cfg.world_w, max(0.0, c.x + math.cos(c.a) * c.v))
-            c.y = min(cfg.world_h, max(0.0, c.y + math.sin(c.a) * c.v))
+            near = [(orgs[j], d) for j, d in zip(idx[i][1:], dist[i][1:])
+                    if orgs[j].alive and d != np.inf]
+            left, right, split = o.brain.step(self.sense(o, near))
+            o.out = [left, right, split]
 
-            d = self.items - (c.x, c.y)
-            hit = np.nonzero(np.hypot(d[:, 0], d[:, 1]) < cfg.creature_r + 5)[0]
-            for i in hit:
-                if self.kind[i] == FOOD:
-                    c.eaten += 1
-                    c.energy += cfg.food_energy
-                else:
-                    c.poisoned += 1
-                    c.energy += cfg.poison_energy
-                self._respawn(i)
+            speed = o.st["speed"]
+            if speed:
+                o.a += (right - left) * o.st["turn"]
+                o.v = max(0.0, min(speed, (left + right) / 2 * speed))
+                o.x = min(cfg.world_w, max(0.0, o.x + math.cos(o.a) * o.v))
+                o.y = min(cfg.world_h, max(0.0, o.y + math.sin(o.a) * o.v))
+                self.clear_obstacles(o)
 
-            c.energy -= cfg.energy_drain + c.v * 0.05
-            c.age += 1
-            if c.energy <= 0:
-                c.alive = False
+            self.feed(o, near)
+            self.bite(o, near)
+
+            o.energy -= o.st["drain"] + o.v * cfg.move_cost
+            o.energy = min(o.energy, o.st["capacity"] * 2.0)
+            o.age += 1
+            if o.energy <= 0 or o.age > o.lifespan:
+                o.alive = False
+                self.deaths += 1
+                continue
+            if (split > 0 and o.energy >= o.st["capacity"] * cfg.split_energy
+                    and len(self.organisms) + len(newborns) < cfg.max_pop):
+                newborns.append(self.divide(o, near))
+
+        self.organisms = [o for o in self.organisms if o.alive] + newborns
+        self.births += len(newborns)
         self.tick += 1
 
-    def run(self):
-        while not self.done:
-            self.step()
-        return self.score()
+    def feed(self, o, near):
+        """Photosynthesis, minus whatever the neighbours are shading out."""
+        light = o.st["light"]
+        if light <= 0:
+            return
+        cfg = self.cfg
+        crowd = sum(other.body.mass for other, d in near if d < cfg.shade_radius)
+        o.energy += light * self.light_mult / (1.0 + cfg.shade_factor * crowd)
 
-    def score(self):
-        for c in self.creatures:
-            c.genome.fitness = max(0.0, c.fitness)
-        return self.creatures
+    def bite(self, o, near):
+        eaters = o.st["eaters"]
+        if not eaters:
+            return
+        cfg = self.cfg
+        reach = o.st["reach"]
+        for other, d in near:
+            if not other.alive or d > reach + other.body.radius(cfg):
+                continue
+            bite = cfg.bite_rate * eaters * (1.0 - other.st["armor"])
+            bite = min(bite, other.energy)
+            other.energy -= bite
+            # toxins hurt the diner, armour on the diner does not help
+            o.energy += bite * (1.0 - other.st["toxin"])
+            o.energy -= bite * other.st["toxin"]
+            o.eaten += bite
+            if other.energy <= 0:
+                other.alive = False
+                self.deaths += 1
+            break
+
+    def divide(self, o, near):
+        """Mitosis. The child is a mutated copy; sometimes it borrows genes from
+        a neighbour, which is as close to sex as this dish gets."""
+        cfg = self.cfg
+        genome = o.genome
+        mate = None
+        if self.rng.random() < cfg.p_sex:
+            options = [x for x, d in near if x.alive and d < cfg.mate_radius]
+            if options:
+                mate = self.rng.choice(options)
+        child_genome = (Genome.crossover(genome, mate.genome, cfg) if mate
+                        else genome.copy())
+        child_genome.mutate(self.innov, cfg)
+        child_body = o.body.copy().mutate(cfg)
+
+        share = o.energy * (1.0 - cfg.split_cost) / 2.0
+        o.energy = share
+        o.born += 1
+        a = self.rng.uniform(0, 2 * math.pi)
+        d = o.body.radius(cfg) + cfg.cell_r * 2
+        return Organism(
+            child_genome, child_body,
+            min(cfg.world_w, max(0.0, o.x + math.cos(a) * d)),
+            min(cfg.world_h, max(0.0, o.y + math.sin(a) * d)),
+            self.rng.uniform(0, 2 * math.pi), share, cfg, gen=o.gen + 1,
+            lifespan=self.jitter_lifespan(o.lifespan))
+
+    # --- readouts for the UI ---
+
+    def census(self):
+        c = {"plant": 0, "animal": 0, "microbe": 0}
+        mass = neurons = gen = 0
+        for o in self.organisms:
+            c[o.kingdom] += 1
+            mass += o.body.mass
+            neurons += len(o.genome.nodes)
+            gen = max(gen, o.gen)
+        n = max(len(self.organisms), 1)
+        c.update(pop=len(self.organisms), mass=mass / n,
+                 neurons=neurons / n, depth=gen,
+                 births=self.births, deaths=self.deaths)
+        return c
