@@ -101,7 +101,7 @@ class Organism:
             self.plan = self.body.growth_order()
             self.grown = self.body.mass
         if not hasattr(self, "upkeep"):
-            self.upkeep = self.st["drain"]
+            self.upkeep = self.st.get("drain", 0.0)
 
 
 class _Husk:
@@ -130,7 +130,7 @@ class Corpse:
         self.energy = energy
         self.alive = True
         self.age = 0
-        self.st = {"toxin": 0.0, "armor": 0.0}
+        self.st = {"toxin": 0.0, "armor": 0.0, "mass": mass}
         self.chirp = 0.0
         self.body = _Husk(mass)
 
@@ -192,9 +192,9 @@ class World:
             # a body can only give back what it took in and did not spend:
             # unspent energy, plus what was invested in building its cells,
             # minus what decomposition loses. Never more.
-            invested = cfg.cell_build * o.st["mass"]
+            invested = cfg.cell_build * o.st.get("mass", o.body.mass)
             left = (max(0.0, o.energy) + invested) * cfg.corpse_keep
-            self.corpses.append(Corpse(o.x, o.y, left, o.st["mass"]))
+            self.corpses.append(Corpse(o.x, o.y, left, o.st.get("mass", o.body.mass)))
 
     # --- the sky ---
 

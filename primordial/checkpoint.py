@@ -43,6 +43,7 @@ def load(path):
     if state.get("version") != VERSION:
         raise ValueError(f"checkpoint version {state.get('version')} != {VERSION}")
     _refresh_config(state)
+    _refresh_organisms(state)
     random.setstate(state["py_random"])
     return state
 
@@ -67,6 +68,31 @@ def _refresh_config(state):
             added.append(name)
     if added:
         print(f"checkpoint: filled in new config fields {', '.join(sorted(added))}")
+
+
+def _refresh_organisms(state):
+    """Bring each organism's cached stats up to date with the current engine.
+
+    `st` is a plain dict computed from body.stats() and pickled as-is. When a
+    field is added to that dict later, an organism loaded from an older
+    checkpoint is simply missing it - so recompute st (and the derived upkeep)
+    for anyone whose dict predates the current fields, using whatever part of
+    the body they had already grown.
+    """
+    world = state.get("world")
+    cfg = getattr(world, "cfg", None)
+    if world is None or cfg is None:
+        return
+    from .body import Body
+    probe = Body().stats(cfg)
+    stale = 0
+    for o in world.organisms:
+        if any(k not in o.st for k in probe):
+            o.refresh(cfg)
+            stale += 1
+    if stale:
+        print(f"checkpoint: refreshed stats for {stale} organism(s) "
+              "with an outdated stat cache")
 
 
 def newest(path):
