@@ -259,14 +259,14 @@ class Renderer:
         """The actual state of the ground: bright where light is untouched,
         dark where something has grazed it down."""
         cfg = self.cfg
+        # near-neutral and dim on purpose: this is ground, not weather. The
+        # organisms are the subject and they have to stay readable on top of it.
         avail = world.capacity * world.reserve * world.daylight
-        v = np.clip(avail * 190.0, 0, 190).astype(np.uint8)
+        t = np.clip(avail, 0.0, 1.0).T * 34.0
         rgb = np.empty((world.gw, world.gh, 3), dtype=np.uint8)
-        # surfarray wants (x, y); the grid is stored (row, col)
-        t = v.T
-        rgb[:, :, 0] = np.minimum(255, 12 + t * 0.42)
-        rgb[:, :, 1] = np.minimum(255, 14 + t * 0.55)
-        rgb[:, :, 2] = np.minimum(255, 20 + t * 0.30)
+        rgb[:, :, 0] = 13 + t * 0.85
+        rgb[:, :, 1] = 15 + t * 1.00
+        rgb[:, :, 2] = 20 + t * 0.80
         patch = pygame.surfarray.make_surface(rgb)
         tl = self.cam.to_screen(0, 0)
         br = self.cam.to_screen(cfg.world_w, cfg.world_h)
