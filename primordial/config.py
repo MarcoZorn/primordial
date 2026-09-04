@@ -135,7 +135,7 @@ class Config:
     trait_step: float = 0.14
     trait_cap: float = 1.6
     trait_cost: float = 0.055      # upkeep per unit of capability, anywhere
-    bite_blinds: float = 1.5       # how fast predation shuts photosynthesis off
+    bite_blinds: float = 0.9       # how fast predation shuts photosynthesis off
     max_cells: int = 256
 
     # --- speciation (labels and colours only, selection is what it is) ---

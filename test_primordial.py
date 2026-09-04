@@ -211,15 +211,22 @@ def test_predation_shuts_off_photosynthesis():
 
     What blinds you is the share of the body given over to predation, not the
     raw amount - otherwise one cell drifting slightly predatory starves an
-    entire large organism.
+    entire large organism. The falloff is a ramp, not a cliff: a lineage
+    drifting toward predation needs a survivable middle ground, or mutation
+    can essentially never cross from autotroph to competent predator in one
+    jump without an energy gap killing it first.
     """
     cfg = Config()
     plant = Body({(0, 0): blank(), (1, 0): _cell(PHOTO)})
     dabbler = Body({(0, 0): blank(), (1, 0): _cell(PHOTO), (2, 0): _cell(BITE)})
     committed = Body({(0, 0): blank(), (1, 0): _cell(BITE), (2, 0): _cell(BITE)})
+    maxed = _cell(BITE, cfg.trait_cap)
+    fully_bite = Body({(0, 0): maxed, (1, 0): maxed, (2, 0): maxed})
     assert dabbler.stats(cfg)["light"] < plant.stats(cfg)["light"]
     assert dabbler.stats(cfg)["light"] > 0.0, "part-time predation is not blinding"
-    assert committed.stats(cfg)["light"] == 0.0, "a committed eater gets no light"
+    assert committed.stats(cfg)["light"] > 0.0, \
+        "the ramp must leave a majority-predator body some light to live on"
+    assert fully_bite.stats(cfg)["light"] == 0.0, "total commitment still gets no light"
     assert committed.kingdom() == "animal"
 
 
