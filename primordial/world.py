@@ -119,6 +119,7 @@ class World:
         self.innov = None      # set by the driver so ids stay consistent
         self.event = None
         self.log = []
+        self.neurons_total = 0
         self.obstacles = [
             (self.rng.uniform(0, cfg.world_w), self.rng.uniform(0, cfg.world_h),
              self.rng.uniform(*cfg.obstacle_r))
@@ -404,6 +405,7 @@ class World:
                     and len(self.organisms) + len(newborns) < cfg.max_pop):
                 newborns.append(self.divide(o, near))
 
+        self.neurons_total = sum(len(o.genome.nodes) for o in self.organisms)
         self.organisms = [o for o in self.organisms if o.alive] + newborns
         for c in self.corpses:
             c.energy -= self.cfg.corpse_decay * c.body.mass
@@ -461,7 +463,9 @@ class World:
                 mate = self.rng.choice(options)
         child_genome = (Genome.crossover(genome, mate.genome, cfg) if mate
                         else genome.copy())
-        child_genome.mutate(self.innov, cfg)
+        # refuse to grow the collective brain past what memory can hold
+        child_genome.mutate(self.innov, cfg,
+                            duplicate=self.neurons_total < cfg.neuron_budget)
         child_body = o.body.copy().mutate(cfg)
 
         share = o.energy * (1.0 - cfg.split_cost) / 2.0
@@ -510,7 +514,7 @@ class World:
                  mass=mass / n, neurons=neurons / n, synapses=syn / n,
                  depth=gen, energy=energy / n, cells=cells,
                  traits={k: round(v, 2) for k, v in traits.items()},
-                 loops=loops,
+                 loops=loops, neurons_total=self.neurons_total,
                  top_mass=top_mass, top_neurons=top_neurons, top_age=top_age,
                  corpses=len(self.corpses),
                  chirping=sum(1 for o in self.organisms if o.chirp > 0.15),

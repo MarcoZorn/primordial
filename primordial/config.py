@@ -90,8 +90,13 @@ class Config:
     p_duplicate: float = 0.05
     duplicate_share: float = 0.25  # fraction of the hidden layer copied at once
     duplicate_jitter: float = 0.25
-    max_neurons: int = 3000        # a ceiling, not a target: past this a single
-                                   # brain costs more than the whole dish
+    # a fruit fly runs on about 135,000 neurons. That is the scale this is
+    # aimed at, and it fits: such a brain evaluates in ~2.4 ms and its genome
+    # is ~45 MB. What does not fit is many of them at once, hence the budget.
+    max_neurons: int = 250_000
+    # total neurons across the whole population. Duplication is refused above
+    # this, so the dish cannot mutate its way into swapping out the machine.
+    neuron_budget: int = 4_000_000
     p_add_node: float = 0.025
     p_toggle: float = 0.01
     p_inherit_disabled: float = 0.75

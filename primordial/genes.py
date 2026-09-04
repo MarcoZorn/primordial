@@ -110,14 +110,14 @@ class Genome:
 
     # --- mutation ---
 
-    def mutate(self, innov, cfg):
+    def mutate(self, innov, cfg, duplicate=True):
         if random.random() < cfg.p_weight:
             self.mutate_weights(cfg)
         if random.random() < cfg.p_add_conn:
             self.mutate_add_conn(innov, cfg)
         if random.random() < cfg.p_add_node:
             self.mutate_add_node(innov, cfg.max_neurons)
-        if random.random() < cfg.p_duplicate:
+        if duplicate and random.random() < cfg.p_duplicate:
             self.mutate_duplicate(innov, cfg)
         if random.random() < cfg.p_toggle:
             self.mutate_toggle()

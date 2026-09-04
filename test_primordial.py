@@ -79,6 +79,23 @@ def test_a_big_brain_costs_more_to_run():
     assert grown.upkeep > small.upkeep, "a larger brain must cost more to run"
 
 
+def test_the_neuron_budget_stops_runaway_growth():
+    """Duplication compounds, so without a ceiling the population can mutate
+    its way straight through the machine's memory."""
+    cfg = Config(start_pop=4, neuron_budget=0)
+    w = World(cfg, seed=2)
+    w.seed_life(Innovations())
+    w.neurons_total = 10 ** 9
+    parent = w.organisms[0]
+    parent.energy = 900.0
+    before = len(parent.genome.nodes)
+    for _ in range(30):
+        child = w.divide(parent, [])
+        parent.energy = 900.0
+        assert len(child.genome.nodes) < before * 3, \
+            "duplication must be refused once the budget is spent"
+
+
 def test_the_two_evaluation_paths_agree():
     """Large brains are evaluated with numpy instead of a python loop. The two
     must produce identical numbers, or the speedup silently changes the
