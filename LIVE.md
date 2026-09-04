@@ -1,46 +1,46 @@
 # primordial — live run status
 
-**Run `genesis` · tick 27,000 · day 11 · 0.0 h of compute**
+**Run `genesis` · tick 108,000 · day 45 · 0.5 h of compute**
 
-_Updated 2026-09-04 09:14 UTC. Generated from telemetry by `status.py`; nothing here is written by hand._
+_Updated 2026-09-04 09:44 UTC. Generated from telemetry by `status.py`; nothing here is written by hand._
 
 ## Right now
 
 | | |
 |---|---|
-| organisms alive | **679** |
-| plants | 374 |
-| animals | 13 |
-| microbes | 292 |
-| species | 18 |
-| mean cells per body | 1.80 |
-| largest body | 5 cells |
-| mean neurons | 38.2 |
-| largest brain | 41 neurons |
-| deepest lineage | 18 generations |
-| oldest living | 7,169 ticks |
-| carrion | 17 |
-| chirping | 248 |
-| total births | 1,333 |
-| total deaths | 6,783 |
-| weather | bloom |
-| daylight | 0.68 |
-| resumes | 0 |
+| organisms alive | **1,301** |
+| plants | 1,300 |
+| animals | 1 |
+| microbes | 0 |
+| species | 6 |
+| mean cells per body | 1.58 |
+| largest body | 3 cells |
+| mean neurons | 110.1 |
+| largest brain | 115 neurons |
+| deepest lineage | 70 generations |
+| oldest living | 25,956 ticks |
+| carrion | 256 |
+| chirping | 224 |
+| total births | 26,081 |
+| total deaths | 34,415 |
+| weather | drought |
+| daylight | 1.00 |
+| resumes | 1 |
 
 ## Cell census
 
 | cell | count | share |
 |---|---|---|
-| photo | 499 | 40.9% |
-| core | 363 | 29.8% |
-| mover | 156 | 12.8% |
-| digest | 58 | 4.8% |
-| armor | 56 | 4.6% |
-| sensor | 29 | 2.4% |
-| store | 21 | 1.7% |
-| shell | 18 | 1.5% |
-| eater | 11 | 0.9% |
-| toxin | 9 | 0.7% |
+| photo | 2,014 | 97.9% |
+| mover | 13 | 0.6% |
+| digest | 9 | 0.4% |
+| sensor | 8 | 0.4% |
+| store | 6 | 0.3% |
+| armor | 3 | 0.1% |
+| toxin | 2 | 0.1% |
+| shell | 2 | 0.1% |
+| eater | 1 | 0.0% |
+| core | 0 | 0.0% |
 
 ## Milestones reached
 
@@ -55,40 +55,40 @@ _Updated 2026-09-04 09:14 UTC. Generated from telemetry by `status.py`; nothing 
 | first 10-cell body | not yet |
 | first 25-cell body | not yet |
 | first animal | 1,000 |
-| 50+ neuron brain | not yet |
-| 100+ neuron brain | not yet |
+| 50+ neuron brain | 71,000 |
+| 100+ neuron brain | 71,000 |
 
 ### population
 
 ```
-                          █
-                          █
-█                         █
-██                      ███
-███ █                  ████
-██████████           ██████
+                                                
+                                            █   
+        █                                   ██ █
+       ███ █ █   ██  █                █ █ ██████
+       █████ ███████ █ █           █████████████
+      ███████████████████████ ██████████████████
 ```
 
 ### mean cells per body
 
 ```
-                          █
-                          █
-                          █
-                       ████
-                     █ ████
-    █      ██  ████████████
+               ███  █                           
+         ████████████████████ █████████ █       
+       ███████████████████████████████████████  
+       █████████████████████████████████████████
+      ██████████████████████████████████████████
+█ ██ ███████████████████████████████████████████
 ```
 
 ### mean neurons
 
 ```
-           ██             █
-           ██             █
-         ██████          ██
-         ████████ █     ███
-        ██████████████ ████
-     ██████████████████████
+                             ███████████████████
+                             ███████████████████
+                             ███████████████████
+                             ███████████████████
+                             ███████████████████
+                             ███████████████████
 ```
 
 ---
