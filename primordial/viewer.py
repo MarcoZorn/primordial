@@ -51,7 +51,7 @@ def complexity(o):
     definition of 'most evolved', so this is a ranking for the UI, not a claim.
     """
     nodes, conns = o.genome.complexity()
-    return nodes + conns * 0.5 + o.body.mass * 2.0 + o.gen * 0.5 + o.brain.loops * 3.0
+    return nodes + conns * 0.5 + o.st["mass"] * 2.0 + o.gen * 0.5 + o.brain.loops * 3.0
 
 
 class Viewer:
@@ -147,7 +147,7 @@ class Viewer:
         if not alive:
             return
         def gap(o):
-            return ((o.x - wx) ** 2 + (o.y - wy) ** 2) ** 0.5 - o.body.radius(self.cfg)
+            return ((o.x - wx) ** 2 + (o.y - wy) ** 2) ** 0.5 - o.radius(self.cfg)
         o = min(alive, key=gap)
         if gap(o) < 60 / max(self.render.cam.zoom, 0.01):
             self.sel = o

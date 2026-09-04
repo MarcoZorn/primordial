@@ -6,13 +6,14 @@ checks broke at least once.
 import math
 import random
 
-from primordial.body import BITE, Body, N_TRAITS, PHOTO, THRUST, _connected, blank
+from primordial.body import (ACTIVE_TRAITS, BITE, Body, N_TRAITS, PHOTO,
+                             THRUST, _connected, blank)
 from primordial.brain import Brain
 from primordial.config import Config
 from primordial.evolution import Speciator
 from primordial.genes import Genome, Innovations
 from primordial.store import load, save
-from primordial.world import N_OUTPUTS, Organism, World, n_inputs
+from primordial.world import Organism, World, n_inputs, n_outputs, used_inputs
 
 
 def genome(cfg, innov, n=40):
@@ -239,7 +240,10 @@ def test_capability_is_never_free():
     """A cell good at everything must cost more than one that commits."""
     cfg = Config()
     focused = Body({(0, 0): blank(), (1, 0): _cell(PHOTO, 1.0)})
-    generalist = Body({(0, 0): blank(), (1, 0): [0.5] * N_TRAITS})
+    spread = blank()
+    for t in range(ACTIVE_TRAITS):
+        spread[t] = 0.5
+    generalist = Body({(0, 0): blank(), (1, 0): spread})
     assert generalist.stats(cfg)["drain"] > focused.stats(cfg)["drain"]
 
 
@@ -296,6 +300,25 @@ def test_killing_the_same_organism_twice_changes_nothing():
     w.kill(o)
     assert w.deaths == deaths, "a dead organism must not die again"
     assert len(w.corpses) == corpses, "a body must not leave two corpses"
+
+
+def test_an_organism_is_born_small_and_grows():
+    """Paying for a whole body out of what you inherited caps a newborn at a
+    handful of cells. Growing over a lifetime removes that ceiling."""
+    cfg = Config(start_pop=2)
+    w = World(cfg, seed=8)
+    w.seed_life(Innovations())
+    o = w.organisms[0]
+    for _ in range(40):
+        o.body.mutate(cfg)
+    o.plan = o.body.growth_order()
+    assert len(o.plan) == o.body.mass, "the plan must cover the whole body"
+    assert o.grown == 1, "an organism starts as a single cell"
+    assert o.st["mass"] == 1, "stats must reflect what is grown, not the plan"
+    o.grown = len(o.plan)
+    o.refresh(cfg)
+    assert o.st["mass"] == o.body.mass
+    assert o.st["drain"] > 0
 
 
 def test_a_corpse_never_returns_more_than_the_body_held():

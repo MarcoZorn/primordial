@@ -11,7 +11,7 @@ import numpy as np
 
 import pygame
 
-from .body import (ARMOR, BITE, CORE, DIGEST, N_TRAITS, PHOTO, SENSE,
+from .body import (ACTIVE_TRAITS, ARMOR, BITE, CORE, DIGEST, PHOTO, SENSE,
                    SHELL, STORE, THRUST, TOXIN, TRAIT_NAME, TYPE_NAME)
 
 BG = (12, 14, 19)
@@ -39,18 +39,19 @@ CELL_COLOR = {
 
 def cell_color(cell):
     """A cell is a mixture, so its colour is the mixture of what it does."""
-    total = sum(cell)
+    live = cell[:ACTIVE_TRAITS]
+    total = sum(live)
     if total < 0.15:
         return CELL_COLOR[CORE]
     r = g = b = 0.0
-    for t in range(N_TRAITS):
+    for t in range(ACTIVE_TRAITS):
         w = cell[t] / total
         c = CELL_COLOR[t]
         r += c[0] * w
         g += c[1] * w
         b += c[2] * w
     # a committed cell is vivid, a jack-of-all-trades is washed out
-    focus = min(1.0, max(cell) / total * 1.6)
+    focus = min(1.0, max(live) / total * 1.6)
     return (int(r * focus + 150 * (1 - focus)),
             int(g * focus + 155 * (1 - focus)),
             int(b * focus + 165 * (1 - focus)))
@@ -305,12 +306,12 @@ class Renderer:
             if dim:
                 col = (col[0] // 4 + 10, col[1] // 4 + 11, col[2] // 4 + 13)
             pygame.draw.circle(self.screen, col, (int(sx), int(sy)),
-                               max(2, int(o.body.radius(cfg) * z)))
+                               max(2, int(o.radius(cfg) * z)))
             return
         ca, sa = math.cos(o.a), math.sin(o.a)
         step = cfg.cell_r * 2 * z
         spots = []
-        for (gx, gy), cell in o.body.cells.items():
+        for (gx, gy), cell in o.expressed().items():
             px, py = gx * step, gy * step
             x = sx + px * ca - py * sa
             y = sy + px * sa + py * ca
@@ -333,10 +334,10 @@ class Renderer:
                 pygame.draw.circle(self.screen, BRIGHT, (x, y), int(r) + 1, 1)
         if o.chirp > 0.15:
             pygame.draw.circle(self.screen, (240, 220, 140), (int(sx), int(sy)),
-                               int((o.body.radius(cfg) + 6 + 22 * o.chirp) * z), 1)
+                               int((o.radius(cfg) + 6 + 22 * o.chirp) * z), 1)
         if is_sel:
             pygame.draw.circle(self.screen, BRIGHT, (int(sx), int(sy)),
-                               int(o.body.radius(cfg) * z + 6 * z + 3), 1)
+                               int(o.radius(cfg) * z + 6 * z + 3), 1)
 
     def vision(self, o):
         cfg = self.cfg
@@ -592,4 +593,5 @@ class Renderer:
 
 def b_count(o):
     n, c = o.genome.complexity()
-    return f"{o.body.mass} cells  {n} neurons  {c} synapses"
+    hidden = n - len(o.brain.inputs) - len(o.brain.bias) - len(o.brain.outputs)
+    return f"{o.st['mass']}/{len(o.plan)} cells  {hidden} hidden  {c} synapses"

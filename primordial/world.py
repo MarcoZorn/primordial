@@ -15,25 +15,38 @@ from .body import Body
 from .brain import Brain
 from .genes import Genome
 
-N_OUTPUTS = 4          # left thruster, right thruster, urge to divide, chirp
+# what the world currently drives: left thruster, right thruster, urge to
+# divide, chirp. The rest of the output pool is reserved for actions not yet
+# invented, and reads as ignored until one is.
+USED_OUTPUTS = 4
 
 
-def n_inputs(cfg):
+def n_outputs(cfg):
+    return cfg.max_outputs
+
+
+def used_inputs(cfg):
     # per ray: what it sees (near, rich, toxic) and what it hears (chirp)
     # then: 4 walls, energy, age, own speed, own turn rate, light underfoot
     return cfg.n_rays * 4 + 9
 
 
+def n_inputs(cfg):
+    return cfg.max_inputs
+
+
 class Organism:
     __slots__ = ("genome", "body", "brain", "st", "x", "y", "a", "v", "w",
                  "energy", "age", "alive", "sensors", "out", "gen", "eaten",
-                 "born", "lifespan", "chirp", "upkeep")
+                 "born", "lifespan", "chirp", "upkeep", "plan", "grown")
 
     def __init__(self, genome, body, x, y, a, energy, cfg, gen=0, lifespan=None):
         self.genome = genome
         self.body = body
         self.brain = Brain(genome)
-        self.st = body.stats(cfg)
+        self.plan = body.growth_order()
+        self.grown = 1
+        self.st = body.stats(cfg, self.expressed())
         hidden = len(genome.nodes) - len(self.brain.inputs) - len(self.brain.bias) \
             - len(self.brain.outputs)
         self.upkeep = (self.st["drain"]
@@ -52,11 +65,26 @@ class Organism:
         # inherited with a wobble, so cohorts do not all die on the same tick
         self.lifespan = lifespan or cfg.max_age
         self.sensors = [0.0] * n_inputs(cfg)
-        self.out = [0.0] * N_OUTPUTS
+        self.out = [0.0] * n_outputs(cfg)
+
+    def expressed(self):
+        """The part of the body plan actually built so far."""
+        return {c: self.body.cells[c] for c in self.plan[:self.grown]}
+
+    def refresh(self, cfg):
+        self.st = self.body.stats(cfg, self.expressed())
+        hidden = (len(self.genome.nodes) - len(self.brain.inputs)
+                  - len(self.brain.bias) - len(self.brain.outputs))
+        self.upkeep = (self.st["drain"]
+                       + cfg.neuron_cost * max(0, hidden)
+                       + cfg.synapse_cost * len(self.brain.edges))
+
+    def radius(self, cfg):
+        return self.body.radius(cfg, self.st["mass"])
 
     @property
     def kingdom(self):
-        return self.body.kingdom()
+        return self.body.kingdom(self.expressed())
 
     # the network and the current sensor reading are both derived from state
     # that is already saved, so a checkpoint does not carry them
@@ -69,6 +97,9 @@ class Organism:
             setattr(self, k, v)
         self.brain = Brain(self.genome)
         self.sensors = [0.0] * len(self.brain.inputs)
+        if not hasattr(self, "plan"):
+            self.plan = self.body.growth_order()
+            self.grown = self.body.mass
         if not hasattr(self, "upkeep"):
             self.upkeep = self.st["drain"]
 
@@ -79,8 +110,8 @@ class _Husk:
     def __init__(self, mass):
         self.mass = mass
 
-    def radius(self, cfg):
-        return cfg.cell_r * math.sqrt(self.mass)
+    def radius(self, cfg, mass=None):
+        return cfg.cell_r * math.sqrt(self.mass if mass is None else mass)
 
 
 class Corpse:
@@ -135,7 +166,7 @@ class World:
         """Everything starts as one undifferentiated cell with a random brain."""
         self.innov = innov
         cfg = self.cfg
-        proto = Genome.minimal(n_inputs(cfg), N_OUTPUTS, innov, cfg)
+        proto = Genome.minimal(n_inputs(cfg), n_outputs(cfg), innov, cfg)
         for _ in range(cfg.start_pop):
             g = proto.copy().mutate(innov, cfg)
             ang = self.rng.uniform(0, 2 * math.pi)
@@ -161,9 +192,9 @@ class World:
             # a body can only give back what it took in and did not spend:
             # unspent energy, plus what was invested in building its cells,
             # minus what decomposition loses. Never more.
-            invested = cfg.cell_build * o.body.mass
+            invested = cfg.cell_build * o.st["mass"]
             left = (max(0.0, o.energy) + invested) * cfg.corpse_keep
-            self.corpses.append(Corpse(o.x, o.y, left, o.body.mass))
+            self.corpses.append(Corpse(o.x, o.y, left, o.st["mass"]))
 
     # --- the sky ---
 
@@ -241,7 +272,7 @@ class World:
 
     def clear_obstacles(self, o):
         """Push an organism back out of anything solid it walked into."""
-        r = o.body.radius(self.cfg)
+        r = o.radius(self.cfg)
         for ox, oy, orad in self.obstacles:
             dx, dy = o.x - ox, o.y - oy
             d = math.hypot(dx, dy)
@@ -302,8 +333,7 @@ class World:
         rays = cfg.n_rays
         half = cfg.fov / 2
         wedge = cfg.fov / rays
-        width = n_inputs(cfg)
-        out = np.zeros((n, width))
+        out = np.zeros((n, n_inputs(cfg)))
         if n == 0:
             return out
 
@@ -420,8 +450,9 @@ class World:
             near = [(things[j], d) for j, d in zip(idx[i][1:], dist[i][1:])
                     if things[j].alive and d != np.inf]
             o.sensors = senses[i]
-            left, right, split, chirp = o.brain.step(o.sensors)
-            o.out = [left, right, split, chirp]
+            acts = o.brain.step(o.sensors)
+            left, right, split, chirp = acts[:USED_OUTPUTS]
+            o.out = acts
             o.chirp = max(0.0, chirp)
             if o.chirp:
                 o.energy -= cfg.chirp_cost * o.chirp
@@ -439,6 +470,11 @@ class World:
             self.bite(o, near)
 
             o.energy -= o.upkeep + o.v * cfg.move_cost
+            if (o.grown < len(o.plan) and self.tick % cfg.grow_every == 0
+                    and o.energy > cfg.grow_reserve * o.st["capacity"] + cfg.cell_build):
+                o.energy -= cfg.cell_build
+                o.grown += 1
+                o.refresh(cfg)
             o.energy = min(o.energy, o.st["capacity"] * 2.0)
             o.age += 1
             if o.energy <= 0 or o.age > o.lifespan:
@@ -464,7 +500,7 @@ class World:
         if light <= 0:
             return
         cfg = self.cfg
-        crowd = sum(other.body.mass for other, d in near
+        crowd = sum(other.st["mass"] for other, d in near
                     if d < cfg.shade_radius and isinstance(other, Organism))
         gy, gx = self.cell_of(o.x, o.y)
         here = self.capacity[gy, gx] * self.reserve[gy, gx]
@@ -482,7 +518,8 @@ class World:
         cfg = self.cfg
         reach = o.st["reach"]
         for other, d in near:
-            if not other.alive or d > reach + other.body.radius(cfg):
+            if not other.alive or d > reach + other.body.radius(cfg,
+                                                                other.st.get("mass")):
                 continue
             if other.energy <= 0:
                 continue
@@ -518,11 +555,12 @@ class World:
 
         share = o.energy * (1.0 - cfg.split_cost) / 2.0
         o.energy = share
-        # growing a body is not free, and a bigger child costs more to build
-        build = cfg.cell_build * child_body.mass
+        # a child is born as one cell and grows the rest itself, so it pays for
+        # one cell now instead of inheriting the price of a whole body
+        build = cfg.cell_build
         o.born += 1
         a = self.rng.uniform(0, 2 * math.pi)
-        d = o.body.radius(cfg) + cfg.cell_r * 2
+        d = o.radius(cfg) + cfg.cell_r * 2
         return Organism(
             child_genome, child_body,
             min(cfg.world_w, max(0.0, o.x + math.cos(a) * d)),
@@ -534,27 +572,28 @@ class World:
 
     def census(self):
         """Everything the dish knows about itself, in one dict."""
-        from .body import CORE, N_TRAITS, TRAIT_NAME, TYPE_NAME
+        from .body import ACTIVE_TRAITS, CORE, TRAIT_NAME, TYPE_NAME
         c = {"plant": 0, "animal": 0, "microbe": 0}
         cells = {name: 0 for name in TYPE_NAME.values()}
         traits = {name: 0.0 for name in TRAIT_NAME.values()}
         mass = neurons = syn = gen = loops = 0
-        top_mass = top_neurons = top_age = 0
+        top_mass = top_neurons = top_age = plan_max = 0
         energy = 0.0
         for o in self.organisms:
             c[o.kingdom] += 1
-            mass += o.body.mass
+            mass += o.st["mass"]
             n, e = o.genome.complexity()
             neurons += n
             syn += e
             energy += o.energy
             gen = max(gen, o.gen)
-            top_mass = max(top_mass, o.body.mass)
+            top_mass = max(top_mass, o.st["mass"])
+            plan_max = max(plan_max, len(o.plan))
             top_neurons = max(top_neurons, n)
             top_age = max(top_age, o.age)
             loops += o.brain.loops
             cells[TYPE_NAME[CORE]] += o.body.count(CORE)
-            for t in range(N_TRAITS):
+            for t in range(ACTIVE_TRAITS):
                 cells[TRAIT_NAME[t]] += o.body.count(t)
                 traits[TRAIT_NAME[t]] += o.body.total(t)
         n = max(len(self.organisms), 1)
@@ -563,7 +602,8 @@ class World:
                  depth=gen, energy=energy / n, cells=cells,
                  traits={k: round(v, 2) for k, v in traits.items()},
                  loops=loops, neurons_total=self.neurons_total,
-                 top_mass=top_mass, top_neurons=top_neurons, top_age=top_age,
+                 top_mass=top_mass, top_plan=plan_max,
+                 top_neurons=top_neurons, top_age=top_age,
                  corpses=len(self.corpses),
                  chirping=sum(1 for o in self.organisms if o.chirp > 0.15),
                  births=self.births, deaths=self.deaths, day=self.day,

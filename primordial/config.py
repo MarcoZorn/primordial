@@ -34,9 +34,9 @@ class Config:
 
     # the world is never stationary: a lineage tuned to today's conditions has
     # to keep paying attention, which is what stops the dish settling
-    day_len: int = 2400          # ticks per day/night cycle
+    day_len: int = 700           # ticks per day/night cycle
     night_light: float = 0.35    # light left at midnight; lean, survivable
-    season_len: int = 96000      # ticks per season cycle
+    season_len: int = 42000      # ticks per season cycle
     season_swing: float = 0.55   # how much the fertile zone breathes
     drift_len: int = 260000      # ticks for the fertile zone to circle once
     drift_amp: float = 0.22      # how far it wanders, as a fraction of the world
@@ -59,6 +59,15 @@ class Config:
     turn_rate: float = 0.11
     sight: float = 200.0
     n_rays: int = 6
+    # Spare capacity, reserved on purpose. Genomes carry more input and output
+    # nodes than the world currently uses, and bodies carry more trait slots
+    # than are currently meaningful. Adding a new sense, a new action or a new
+    # kind of cell later means giving meaning to a slot that already exists,
+    # which leaves every genome structurally unchanged - so a live run never has
+    # to be thrown away to grow a new capability.
+    max_inputs: int = 96
+    max_outputs: int = 12
+    init_density: float = 0.12   # share of possible input->output links at birth
     fov: float = 2.6
     bite_reach: float = 3.0
     bite_rate: float = 1.4         # energy drained per eater cell per tick
@@ -114,6 +123,12 @@ class Config:
 
     # --- body mutation ---
     p_cell_add: float = 0.18
+    p_segment: float = 0.07        # duplicate a block of the body plan
+    segment_share: float = 0.5
+    # an organism is born as a single cell and builds the rest as it can afford
+    # it, so a large body is a life's work rather than an inheritance
+    grow_reserve: float = 0.55     # share of capacity kept back before growing
+    grow_every: int = 12           # ticks between growth steps
     p_cell_drop: float = 0.04
     p_trait: float = 0.12          # chance an expressed trait drifts
     p_trait_new: float = 0.015     # chance a dormant trait switches on
@@ -121,7 +136,7 @@ class Config:
     trait_cap: float = 1.6
     trait_cost: float = 0.055      # upkeep per unit of capability, anywhere
     bite_blinds: float = 1.5       # how fast predation shuts photosynthesis off
-    max_cells: int = 64
+    max_cells: int = 256
 
     # --- speciation (labels and colours only, selection is what it is) ---
     compat_threshold: float = 1.2

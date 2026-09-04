@@ -73,9 +73,14 @@ class Genome:
         for o in outs:
             g.nodes[o] = OUTPUT
         if connect:
-            for s in ins + [bias]:
-                for d in outs:
-                    g.add_conn(s, d, random.gauss(0, cfg.weight_init_std), innov)
+            # sparse, not fully connected: with a large reserved input pool a
+            # complete layer would be thousands of dead synapses at birth
+            density = getattr(cfg, "init_density", 1.0)
+            for d in outs:
+                g.add_conn(bias, d, random.gauss(0, cfg.weight_init_std), innov)
+                for s in ins:
+                    if random.random() < density:
+                        g.add_conn(s, d, random.gauss(0, cfg.weight_init_std), innov)
         return g
 
     def copy(self):
