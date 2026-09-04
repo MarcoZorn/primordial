@@ -9,7 +9,8 @@ import math
 
 import pygame
 
-from .body import ARMOR, CORE, EATER, MOVER, PHOTO, SENSOR, STORE, TOXIN, TYPE_NAME
+from .body import (ARMOR, BITE, CORE, DIGEST, N_TRAITS, PHOTO, SENSE,
+                   SHELL, STORE, THRUST, TOXIN, TRAIT_NAME, TYPE_NAME)
 
 BG = (12, 14, 19)
 PANEL = (19, 22, 29)
@@ -23,13 +24,34 @@ ROCK = (44, 48, 58)
 CELL_COLOR = {
     CORE:   (226, 230, 240),
     PHOTO:  (78, 200, 118),
-    MOVER:  (96, 156, 255),
-    EATER:  (232, 96, 84),
-    SENSOR: (86, 214, 226),
+    THRUST: (96, 156, 255),
+    BITE:   (232, 96, 84),
+    SENSE:  (86, 214, 226),
     ARMOR:  (150, 158, 176),
     STORE:  (238, 200, 92),
     TOXIN:  (198, 108, 232),
+    DIGEST: (226, 148, 96),
+    SHELL:  (110, 122, 148),
 }
+
+
+def cell_color(cell):
+    """A cell is a mixture, so its colour is the mixture of what it does."""
+    total = sum(cell)
+    if total < 0.15:
+        return CELL_COLOR[CORE]
+    r = g = b = 0.0
+    for t in range(N_TRAITS):
+        w = cell[t] / total
+        c = CELL_COLOR[t]
+        r += c[0] * w
+        g += c[1] * w
+        b += c[2] * w
+    # a committed cell is vivid, a jack-of-all-trades is washed out
+    focus = min(1.0, max(cell) / total * 1.6)
+    return (int(r * focus + 150 * (1 - focus)),
+            int(g * focus + 155 * (1 - focus)),
+            int(b * focus + 165 * (1 - focus)))
 
 
 def species_color(sid):
@@ -151,6 +173,13 @@ class Renderer:
         self.buttons = {}
         x = self.size[0] - int(430 * n)
         y = y0 + int(12 * n)
+        y3 = y + int(64 * n)
+        bx = self.size[0] - int(430 * n)
+        bx = self.button("best", bx, y3, int(78 * n))
+        bx = self.button("plant", bx, y3, int(82 * n))
+        bx = self.button("animal", bx, y3, int(92 * n))
+        self.button(f"show:{ui.get('filter', 'all')}", bx, y3, int(150 * n),
+                    on=ui.get("filter", "all") != "all")
         self.text("text", x, y + int(4 * n), DIM, self.fs)
         x += int(42 * n)
         x = self.button("A-", x, y)
@@ -173,6 +202,10 @@ class Renderer:
         self.screen.blit((font or self.f).render(str(s), True, col), (x, y))
 
     def draw(self, world, spec, sel, ui):
+        from .viewer import matches
+        mode = ui.get("filter", "all")
+        self._filter = (lambda o: True) if mode == "all" else (
+            lambda o: matches(o, mode))
         self.screen.fill(BG)
         self.cam.track(sel)
         self.dish(world, sel)
@@ -200,9 +233,10 @@ class Renderer:
                 x, y = self.cam.to_screen(ox, oy)
                 pygame.draw.circle(sc, ROCK, (int(x), int(y)), max(2, int(orad * self.cam.zoom)))
 
+        keep = self._filter
         for o in world.organisms:
             if o.alive and self.cam.visible(o.x, o.y):
-                self.organism(o, o is sel)
+                self.organism(o, o is sel, dim=not keep(o))
 
         if world.is_night:
             veil = pygame.Surface((cfg.view_w, cfg.view_h), pygame.SRCALPHA)
@@ -238,25 +272,30 @@ class Renderer:
             if rect.width > 2:
                 pygame.draw.ellipse(self.screen, (v, v + 2, v + 7), rect)
 
-    def organism(self, o, is_sel):
+    def organism(self, o, is_sel, dim=False):
         cfg = self.cfg
         z = self.cam.zoom
         sx, sy = self.cam.to_screen(o.x, o.y)
         r = max(1.5, cfg.cell_r * z)
         if cfg.cell_r * z < 2.2:
             # too far out to draw cells - one dot, coloured by what it mostly is
-            col = CELL_COLOR[PHOTO] if o.st["photo"] else (
-                CELL_COLOR[EATER] if o.st["eaters"] else CELL_COLOR[CORE])
+            col = (CELL_COLOR[BITE] if o.st["eaters"] > 0.25 else
+                   CELL_COLOR[PHOTO] if o.st["photo"] > 0.25 else CELL_COLOR[CORE])
+            if dim:
+                col = (col[0] // 4 + 10, col[1] // 4 + 11, col[2] // 4 + 13)
             pygame.draw.circle(self.screen, col, (int(sx), int(sy)),
                                max(2, int(o.body.radius(cfg) * z)))
             return
         ca, sa = math.cos(o.a), math.sin(o.a)
         step = cfg.cell_r * 2 * z
-        for (gx, gy), kind in o.body.cells.items():
+        for (gx, gy), cell in o.body.cells.items():
             px, py = gx * step, gy * step
             x = sx + px * ca - py * sa
             y = sy + px * sa + py * ca
-            pygame.draw.circle(self.screen, CELL_COLOR[kind], (int(x), int(y)), int(r))
+            col = cell_color(cell)
+            if dim:
+                col = (col[0] // 4 + 10, col[1] // 4 + 11, col[2] // 4 + 13)
+            pygame.draw.circle(self.screen, col, (int(x), int(y)), int(r))
         if o.chirp > 0.15:
             pygame.draw.circle(self.screen, (240, 220, 140), (int(sx), int(sy)),
                                int((o.body.radius(cfg) + 6 + 22 * o.chirp) * z), 1)
@@ -302,7 +341,7 @@ class Renderer:
             self.text(r, x0 + pad, pad + self.lh * (1.4 + i * 0.95), TEXT, self.fs)
 
         top = pad + int(self.lh * 6)
-        legend_h = int(self.lh * 5.2)
+        legend_h = int(self.lh * 6.2)
         bottom = cfg.view_h - legend_h - int(20 * cfg.ui_scale)
         cols = {}
         for node, d in b.depth.items():
@@ -349,18 +388,25 @@ class Renderer:
         cfg = self.cfg
         x0 = cfg.view_w
         n = cfg.ui_scale
-        y = cfg.view_h - int(self.lh * 5.0)
+        y = cfg.view_h - int(self.lh * 6.0)
         pad = int(16 * n)
         self.text("cell types", x0 + pad, y - int(self.lh * 0.9), DIM, self.fs)
-        order = (CORE, PHOTO, MOVER, EATER, SENSOR, ARMOR, STORE, TOXIN)
+        order = (CORE, PHOTO, THRUST, BITE, SENSE, ARMOR, STORE, TOXIN,
+                 DIGEST, SHELL)
         col_w = (cfg.panel_w - pad * 2) // 2
         for i, kind in enumerate(order):
             cx = x0 + pad + (i % 2) * col_w
             cy = y + (i // 2) * self.lh
             r = int(5 * n)
             pygame.draw.circle(self.screen, CELL_COLOR[kind], (cx + r, int(cy + r + 2)), r)
-            count = o.body.count(kind) if o else 0
-            label = TYPE_NAME[kind] if not o else f"{TYPE_NAME[kind]} {count}"
+            if o is None:
+                label, count = TYPE_NAME[kind], 0
+            elif kind == CORE:
+                count = o.body.count(CORE)
+                label = f"{TYPE_NAME[kind]} {count}"
+            else:
+                count = o.body.count(kind)
+                label = f"{TYPE_NAME[kind]} {count} ({o.body.total(kind):.1f})"
             self.text(label, cx + r * 3, cy, TEXT if count else DIM, self.fs)
 
     # --- stats ---
@@ -381,7 +427,7 @@ class Renderer:
                          else (90, 110, 190),
                          (bx, by, int(bar * world.daylight), int(12 * cfg.ui_scale)))
         rows = [
-            f"tick    {c['tick']}",
+            f"tick    {c['tick']}   loops {c.get('loops', 0)}",
             f"alive   {c['pop']}",
             f"plants  {c['plant']}   animals {c['animal']}   microbes {c['microbe']}",
             f"cells   {c['mass']:.2f} avg   neurons {c['neurons']:.1f} avg",
@@ -415,7 +461,7 @@ class Renderer:
                       (240, 170, 90), self.fb)
 
         hint = ("space pause  f speed  +/- zoom  0 fit  drag pan  c follow  "
-                "click select  g stats  F11 fullscreen  s save  q quit")
+                "b best  p plant  a animal  v filter  g stats  F11 full  q quit")
         self.text(hint[: max(20, int((self.size[0] - int(470 * cfg.ui_scale))
                                      / (7.2 * cfg.ui_scale)))],
                   pad, y0 + cfg.stats_h - int(18 * cfg.ui_scale), (92, 100, 118), self.fs)

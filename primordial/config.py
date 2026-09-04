@@ -25,7 +25,7 @@ class Config:
     # the world is never stationary: a lineage tuned to today's conditions has
     # to keep paying attention, which is what stops the dish settling
     day_len: int = 2400          # ticks per day/night cycle
-    night_light: float = 0.12    # light left at midnight
+    night_light: float = 0.35    # light left at midnight; lean, survivable
     season_len: int = 96000      # ticks per season cycle
     season_swing: float = 0.55   # how much the fertile zone breathes
     drift_len: int = 260000      # ticks for the fertile zone to circle once
@@ -51,6 +51,7 @@ class Config:
     # food chains lose about 90% per trophic level, which is exactly what stops
     # predators from outnumbering the things they eat
     bite_efficiency: float = 0.32
+    digest_cap: float = 0.75       # even a specialist gut cannot beat physics
     # carrion must never be worth more than what died, or death becomes an
     # energy source and the dish runs away
     corpse_keep: float = 0.5       # the rest is lost to decomposition
@@ -78,6 +79,7 @@ class Config:
     weight_init_std: float = 1.0
     weight_cap: float = 8.0
     p_add_conn: float = 0.09
+    p_recurrent: float = 0.25      # share of new connections allowed to loop back
     p_add_node: float = 0.025
     p_toggle: float = 0.01
     p_inherit_disabled: float = 0.75
@@ -85,8 +87,12 @@ class Config:
 
     # --- body mutation ---
     p_cell_add: float = 0.18
-    p_cell_type: float = 0.10
     p_cell_drop: float = 0.04
+    p_trait: float = 0.10          # chance each trait of each cell drifts
+    trait_step: float = 0.14
+    trait_cap: float = 1.6
+    trait_cost: float = 0.055      # upkeep per unit of capability, anywhere
+    bite_blinds: float = 2.0       # how fast predation shuts photosynthesis off
     max_cells: int = 64
 
     # --- speciation (labels and colours only, selection is what it is) ---
@@ -101,7 +107,7 @@ class Config:
     view_w: int = 1180
     view_h: int = 800
     panel_w: int = 440
-    stats_h: int = 205
+    stats_h: int = 240
     ui_scale: float = 0.0        # 0 = pick from the desktop resolution
 
     # --- terrain and weather ---

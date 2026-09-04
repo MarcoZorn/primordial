@@ -6,7 +6,7 @@ checks broke at least once.
 import math
 import random
 
-from primordial.body import Body, CORE, MOVER, PHOTO, _connected
+from primordial.body import BITE, Body, N_TRAITS, PHOTO, THRUST, _connected, blank
 from primordial.brain import Brain
 from primordial.config import Config
 from primordial.evolution import Speciator
@@ -31,17 +31,39 @@ def test_innovations_are_shared():
     assert innov.split(5) == innov.split(5)
 
 
-def test_networks_stay_acyclic():
+def test_every_node_is_evaluated_exactly_once():
     cfg, innov = Config(), Innovations()
     for seed in range(20):
         random.seed(seed)
         g = genome(cfg, innov, 80)
         b = Brain(g)
-        # every node must appear in the topological order exactly once
-        assert sorted(b.order) == sorted(g.nodes), "topological sort dropped a node"
+        assert sorted(b.order) == sorted(g.nodes), "evaluation order dropped a node"
         rank = {n: i for i, n in enumerate(b.order)}
         for src, dst, _ in b.edges:
-            assert rank[src] < rank[dst], "edge points backwards - graph has a cycle"
+            forward = rank[src] < rank[dst]
+            table = b.incoming if forward else b.recurrent
+            assert (src, _) in [(s, w) for s, w in table.get(dst, [])], \
+                "every edge must be classified as forward or recurrent"
+
+
+def test_recurrence_gives_the_network_memory():
+    """A loop means the same input can produce different output over time."""
+    cfg, innov = Config(), Innovations()
+    random.seed(99)
+    g = Genome.minimal(3, 2, innov, cfg)
+    hidden = innov.node()
+    from primordial.genes import HIDDEN
+    g.nodes[hidden] = HIDDEN
+    src = sorted(g.ids("in"))[0]
+    out = sorted(g.ids("out"))[0]
+    g.add_conn(src, hidden, 1.4, innov)
+    g.add_conn(hidden, hidden, 1.6, innov)     # the loop
+    g.add_conn(hidden, out, 1.2, innov)
+    b = Brain(g)
+    assert b.loops >= 1, "self-connection must be classified as recurrent"
+    seq = [b.step([1.0, 0.0, 0.0])[0] for _ in range(4)]
+    assert len({round(v, 9) for v in seq}) > 1, \
+        "a recurrent network fed a constant must still change over time"
 
 
 def test_brain_is_deterministic_and_bounded():
@@ -90,17 +112,44 @@ def test_body_stays_connected():
     for _ in range(300):
         b.mutate(cfg)
         assert _connected(b.cells), "mutation split the body into pieces"
-        assert b.cells[(0, 0)] == CORE, "the core must survive every mutation"
+        assert (0, 0) in b.cells, "the origin cell must survive every mutation"
+        for cell in b.cells.values():
+            assert len(cell) == N_TRAITS
+            assert all(0.0 <= t <= cfg.trait_cap for t in cell)
+
+
+def _cell(trait, value=1.0):
+    c = blank()
+    c[trait] = value
+    return c
 
 
 def test_body_stats_respond_to_composition():
     cfg = Config()
-    still = Body({(0, 0): CORE, (1, 0): PHOTO})
-    swimmer = Body({(0, 0): CORE, (1, 0): MOVER})
-    assert still.stats(cfg)["speed"] == 0.0, "no movers means no movement"
+    still = Body({(0, 0): blank(), (1, 0): _cell(PHOTO)})
+    swimmer = Body({(0, 0): blank(), (1, 0): _cell(THRUST)})
+    assert still.stats(cfg)["speed"] == 0.0, "no thrust means no movement"
     assert swimmer.stats(cfg)["speed"] > 0.0
     assert still.stats(cfg)["light"] > swimmer.stats(cfg)["light"]
     assert still.kingdom() == "plant"
+
+
+def test_predation_shuts_off_photosynthesis():
+    """You are an autotroph or a heterotroph. Halfway is worth half of each."""
+    cfg = Config()
+    plant = Body({(0, 0): blank(), (1, 0): _cell(PHOTO)})
+    hunter = Body({(0, 0): blank(), (1, 0): _cell(PHOTO), (2, 0): _cell(BITE)})
+    assert hunter.stats(cfg)["light"] < plant.stats(cfg)["light"]
+    assert hunter.stats(cfg)["light"] == 0.0, "a committed eater gets no light"
+    assert hunter.kingdom() == "animal"
+
+
+def test_capability_is_never_free():
+    """A cell good at everything must cost more than one that commits."""
+    cfg = Config()
+    focused = Body({(0, 0): blank(), (1, 0): _cell(PHOTO, 1.0)})
+    generalist = Body({(0, 0): blank(), (1, 0): [0.5] * N_TRAITS})
+    assert generalist.stats(cfg)["drain"] > focused.stats(cfg)["drain"]
 
 
 def test_world_runs_and_stays_consistent():

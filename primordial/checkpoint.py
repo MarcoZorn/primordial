@@ -12,7 +12,9 @@ import pickle
 import random
 import time
 
-VERSION = 1
+# bump whenever the genome, the body encoding or the sensory layout changes:
+# an old checkpoint restored into a new engine is silently wrong, not broken
+VERSION = 2
 
 
 def save(path, world, spec, innov, extra=None):

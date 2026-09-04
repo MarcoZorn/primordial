@@ -93,7 +93,8 @@ class Genome:
         return [i for i, k in self.nodes.items() if k in kinds]
 
     def _creates_cycle(self, src, dst):
-        """Would src->dst close a loop? Networks stay feedforward."""
+        """Would src->dst close a loop? Loops are allowed, but only when a
+        mutation deliberately asks for one - see p_recurrent."""
         if src == dst:
             return True
         stack, seen = [dst], set()
@@ -134,9 +135,12 @@ class Genome:
         if not sources or not targets:
             return
         existing = {(c.src, c.dst) for c in self.conns.values()}
+        allow_loop = random.random() < cfg.p_recurrent
         for _ in range(cfg.add_conn_tries):
             s, d = random.choice(sources), random.choice(targets)
-            if (s, d) in existing or self._creates_cycle(s, d):
+            if (s, d) in existing or s == d:
+                continue
+            if not allow_loop and self._creates_cycle(s, d):
                 continue
             self.add_conn(s, d, random.gauss(0, cfg.weight_init_std), innov)
             return

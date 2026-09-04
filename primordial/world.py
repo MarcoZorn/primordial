@@ -11,7 +11,7 @@ import random
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .body import ARMOR, Body, EATER, MOVER, PHOTO, SENSOR, STORE, TOXIN
+from .body import Body
 from .brain import Brain
 from .genes import Genome
 
@@ -378,7 +378,7 @@ class World:
             other.energy -= bite
             # most of what you take is lost in the eating; toxins hurt the
             # diner, and armour on the diner does not help
-            o.energy += bite * cfg.bite_efficiency * (1.0 - other.st["toxin"])
+            o.energy += bite * o.st["digest"] * (1.0 - other.st["toxin"])
             o.energy -= bite * other.st["toxin"]
             o.eaten += bite
             if other.energy <= 0 and other.body is not None:
@@ -419,10 +419,11 @@ class World:
 
     def census(self):
         """Everything the dish knows about itself, in one dict."""
-        from .body import TYPE_NAME
+        from .body import CORE, N_TRAITS, TRAIT_NAME, TYPE_NAME
         c = {"plant": 0, "animal": 0, "microbe": 0}
         cells = {name: 0 for name in TYPE_NAME.values()}
-        mass = neurons = syn = gen = 0
+        traits = {name: 0.0 for name in TRAIT_NAME.values()}
+        mass = neurons = syn = gen = loops = 0
         top_mass = top_neurons = top_age = 0
         energy = 0.0
         for o in self.organisms:
@@ -436,12 +437,17 @@ class World:
             top_mass = max(top_mass, o.body.mass)
             top_neurons = max(top_neurons, n)
             top_age = max(top_age, o.age)
-            for kind in o.body.cells.values():
-                cells[TYPE_NAME[kind]] += 1
+            loops += o.brain.loops
+            cells[TYPE_NAME[CORE]] += o.body.count(CORE)
+            for t in range(N_TRAITS):
+                cells[TRAIT_NAME[t]] += o.body.count(t)
+                traits[TRAIT_NAME[t]] += o.body.total(t)
         n = max(len(self.organisms), 1)
         c.update(tick=self.tick, pop=len(self.organisms),
                  mass=mass / n, neurons=neurons / n, synapses=syn / n,
                  depth=gen, energy=energy / n, cells=cells,
+                 traits={k: round(v, 2) for k, v in traits.items()},
+                 loops=loops,
                  top_mass=top_mass, top_neurons=top_neurons, top_age=top_age,
                  corpses=len(self.corpses),
                  chirping=sum(1 for o in self.organisms if o.chirp > 0.15),
