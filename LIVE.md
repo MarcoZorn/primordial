@@ -1,45 +1,45 @@
 # primordial — live run status
 
-**Run `genesis` · tick 133,000 · day 55 · 1.0 h of compute**
+**Run `genesis` · tick 172,000 · day 71 · 1.5 h of compute**
 
-_Updated 2026-09-04 10:14 UTC. Generated from telemetry by `status.py`; nothing here is written by hand._
+_Updated 2026-09-04 10:44 UTC. Generated from telemetry by `status.py`; nothing here is written by hand._
 
 ## Right now
 
 | | |
 |---|---|
-| organisms alive | **1,799** |
-| plants | 1,789 |
-| animals | 10 |
+| organisms alive | **486** |
+| plants | 486 |
+| animals | 0 |
 | microbes | 0 |
-| species | 14 |
-| mean cells per body | 1.15 |
-| largest body | 5 cells |
-| mean neurons | 109.3 |
-| largest brain | 115 neurons |
-| deepest lineage | 74 generations |
-| oldest living | 24,155 ticks |
-| carrion | 113 |
-| chirping | 159 |
-| total births | 37,782 |
-| total deaths | 46,172 |
-| weather | bloom |
-| daylight | 0.39 |
+| species | 12 |
+| mean cells per body | 1.06 |
+| largest body | 3 cells |
+| mean neurons | 109.4 |
+| largest brain | 113 neurons |
+| deepest lineage | 73 generations |
+| oldest living | 18,446 ticks |
+| carrion | 14 |
+| chirping | 58 |
+| total births | 50,481 |
+| total deaths | 60,838 |
+| weather | calm |
+| daylight | 0.51 |
 | resumes | 3 |
 
 ## Cell census
 
 | cell | count | share |
 |---|---|---|
-| photo | 2,030 | 97.3% |
-| mover | 10 | 0.5% |
-| store | 10 | 0.5% |
-| digest | 8 | 0.4% |
-| eater | 6 | 0.3% |
-| armor | 6 | 0.3% |
-| toxin | 6 | 0.3% |
-| sensor | 5 | 0.2% |
-| shell | 5 | 0.2% |
+| photo | 514 | 99.0% |
+| mover | 2 | 0.4% |
+| eater | 1 | 0.2% |
+| sensor | 1 | 0.2% |
+| store | 1 | 0.2% |
+| armor | 0 | 0.0% |
+| toxin | 0 | 0.0% |
+| digest | 0 | 0.0% |
+| shell | 0 | 0.0% |
 | core | 0 | 0.0% |
 
 ## Milestones reached
@@ -61,34 +61,34 @@ _Updated 2026-09-04 10:14 UTC. Generated from telemetry by `status.py`; nothing 
 ### population
 
 ```
-                                     ███ ███ █ █
-                                    ████████ ███
-                               █  ██████████████
-█       █                █     █████████████████
-███████ █ █             ██ █████████████████████
-████████████████ ███████████████████████████████
+                            ████ ██             
+                         █  ████ ██ █           
+     █                   ████████████  ██       
+ █   █  █               █████████████████       
+██  ███ █    █   █   ██ ████████████████████ █ █
+███████ ███ ███ ███████ ████████████████████████
 ```
 
 ### mean cells per body
 
 ```
-  ███  █                                        
-████████████████ █████████ █                    
-█████████████████████████████████               
-███████████████████████████████████             
-████████████████████████████████████████        
-████████████████████████████████████████████████
+ █  ██                                          
+███████████████ ████                            
+███████████████████████ █                       
+██████████████████████████                      
+█████████████████████████████                   
+███████████████████████████████████ █   ██  ██  
 ```
 
 ### mean neurons
 
 ```
-                ████████████████████████████████
-                ████████████████████████████████
-                ████████████████████████████████
-                ████████████████████████████████
-                ████████████████████████████████
-                ████████████████████████████████
+              ██████████████████████████████████
+              ██████████████████████████████████
+              ██████████████████████████████████
+              ██████████████████████████████████
+              ██████████████████████████████████
+              ██████████████████████████████████
 ```
 
 ---
