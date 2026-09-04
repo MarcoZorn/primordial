@@ -27,7 +27,8 @@ def save(path, world, spec, innov, extra=None):
         "extra": extra or {},
     }
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = f"{path}.tmp"
+    # per-process temp name: two writers must never share one staging file
+    tmp = f"{path}.{os.getpid()}.tmp"
     with gzip.open(tmp, "wb", compresslevel=4) as fh:
         pickle.dump(state, fh, protocol=pickle.HIGHEST_PROTOCOL)
     os.replace(tmp, path)

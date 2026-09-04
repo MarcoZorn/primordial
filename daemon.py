@@ -10,6 +10,8 @@ the last checkpoint. Open `view.py` whenever you want to watch; the viewer is
 read-only and can come and go without touching the run.
 """
 import argparse
+import atexit
+import errno
 import json
 import os
 import signal
@@ -29,8 +31,36 @@ def _stop(signum, frame):
     STOP = True
 
 
+def take_lock(directory):
+    """Refuse to start if another daemon already owns this run.
+
+    Two daemons on one directory step separate copies of the world and
+    overwrite each other's checkpoints, which quietly destroys the run.
+    """
+    path = os.path.join(directory, "daemon.pid")
+    os.makedirs(directory, exist_ok=True)
+    if os.path.exists(path):
+        try:
+            pid = int(open(path).read().strip())
+            os.kill(pid, 0)
+        except (ValueError, OSError) as e:
+            if isinstance(e, OSError) and e.errno not in (errno.ESRCH, errno.EPERM):
+                raise
+            if not isinstance(e, OSError) or e.errno == errno.ESRCH:
+                os.unlink(path)          # stale, the old process is gone
+            else:
+                raise SystemExit(f"another daemon owns {directory} (pid {pid})")
+        else:
+            raise SystemExit(f"another daemon is already running on {directory} "
+                             f"(pid {pid}) - stop it first")
+    with open(path, "w") as fh:
+        fh.write(str(os.getpid()))
+    atexit.register(lambda: os.path.exists(path) and os.unlink(path))
+
+
 class Run:
     def __init__(self, directory, cfg=None, fresh=False):
+        take_lock(directory)
         self.dir = directory
         self.ckpt = os.path.join(directory, "state.pkl.gz")
         self.telemetry = os.path.join(directory, "telemetry.jsonl")
