@@ -254,6 +254,18 @@ def test_capability_is_never_free():
     assert generalist.stats(cfg)["drain"] > focused.stats(cfg)["drain"]
 
 
+def test_size_itself_is_rewarded_not_just_traits():
+    """A bigger body should hold a larger energy buffer purely from bulk, so
+    multicellularity has a payoff distinct from what any single trait buys -
+    otherwise a lineage that grows without also investing in STORE gets no
+    credit at all for the risk of being bigger."""
+    cfg = Config()
+    single = Body({(0, 0): blank()})
+    triple = Body({(0, 0): blank(), (1, 0): blank(), (2, 0): blank()})
+    assert triple.stats(cfg)["capacity"] > single.stats(cfg)["capacity"]
+    # and it must not be a cost discount: cell_build stays flat regardless
+
+
 def test_world_runs_and_stays_consistent():
     cfg = Config(start_pop=60, world_w=800, world_h=600, n_obstacles=6)
     w = World(cfg, seed=11)

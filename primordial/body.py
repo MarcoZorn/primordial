@@ -195,7 +195,13 @@ class Body:
             # what fraction of a bite actually becomes yours
             "digest": min(cfg.digest_cap, cfg.bite_efficiency * (1.0 + digest / m)),
             "shell": cover,
-            "capacity": cfg.start_energy * (1.0 + 0.9 * store),
+            # a bigger body holds a proportionally larger energy buffer purely
+            # from bulk - independent of any trait investment. This is a
+            # reward for size (survives a lean patch better, so lives longer
+            # and reproduces more over its life), not a discount on the cost
+            # of growing: the price per cell is unchanged.
+            "capacity": cfg.start_energy * (1.0 + 0.9 * store
+                                            + cfg.size_capacity_bonus * (m - 1)),
             "toxin": min(1.0, toxin / m),
             # Kleiber's law for the structure, plus rent on every capability
             # a shell is dead weight: it costs little to hold and slows you down
