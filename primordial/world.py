@@ -576,20 +576,27 @@ class World:
         c = {"plant": 0, "animal": 0, "microbe": 0}
         cells = {name: 0 for name in TYPE_NAME.values()}
         traits = {name: 0.0 for name in TRAIT_NAME.values()}
-        mass = neurons = syn = gen = loops = 0
-        top_mass = top_neurons = top_age = plan_max = 0
+        mass = neurons = hidden_sum = syn = gen = loops = 0
+        top_mass = top_neurons = top_hidden = top_age = plan_max = 0
         energy = 0.0
+        fixed_nodes = self.cfg.max_inputs + 1 + self.cfg.max_outputs
         for o in self.organisms:
             c[o.kingdom] += 1
             mass += o.st["mass"]
             n, e = o.genome.complexity()
             neurons += n
+            # n counts the reserved input/output pool too, most of which is
+            # dormant - the number that actually reflects thinking capacity is
+            # what is left over, which is what "hidden" reports
+            hidden = max(0, n - fixed_nodes)
+            hidden_sum += hidden
             syn += e
             energy += o.energy
             gen = max(gen, o.gen)
             top_mass = max(top_mass, o.st["mass"])
             plan_max = max(plan_max, len(o.plan))
             top_neurons = max(top_neurons, n)
+            top_hidden = max(top_hidden, hidden)
             top_age = max(top_age, o.age)
             loops += o.brain.loops
             cells[TYPE_NAME[CORE]] += o.body.count(CORE)
@@ -599,6 +606,7 @@ class World:
         n = max(len(self.organisms), 1)
         c.update(tick=self.tick, pop=len(self.organisms),
                  mass=mass / n, neurons=neurons / n, synapses=syn / n,
+                 hidden_neurons=hidden_sum / n, top_hidden_neurons=top_hidden,
                  depth=gen, energy=energy / n, cells=cells,
                  traits={k: round(v, 2) for k, v in traits.items()},
                  loops=loops, neurons_total=self.neurons_total,

@@ -116,7 +116,7 @@ class Run:
                     last_report = t
                     print(f"t={t:>10} day={c['day']:>6} pop={c['pop']:>5} "
                           f"pl={c['plant']:>5} an={c['animal']:>5} "
-                          f"cells={c['mass']:.2f} neur={c['neurons']:.1f} "
+                          f"cells={c['mass']:.2f} hidden={c.get('hidden_neurons',0):.1f} "
                           f"sp={c['species']:>3} carrion={c['corpses']:>4}",
                           flush=True)
             if t % save_every == 0:

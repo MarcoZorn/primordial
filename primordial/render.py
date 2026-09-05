@@ -468,7 +468,7 @@ class Renderer:
             f"tick    {c['tick']}   loops {c.get('loops', 0)}",
             f"alive   {c['pop']}",
             f"plants  {c['plant']}   animals {c['animal']}   microbes {c['microbe']}",
-            f"cells   {c['mass']:.2f} avg   neurons {c['neurons']:.1f} avg",
+            f"cells   {c['mass']:.2f} avg   hidden neurons {c.get('hidden_neurons',0):.1f} avg",
             f"species {len(spec.species)}   lineage depth {c['depth']}",
             f"births  {c['births']}   deaths {c['deaths']}   carrion {c['corpses']}",
             f"chirping {c['chirping']}",
@@ -530,11 +530,11 @@ class Renderer:
         ]
         right = [
             ("avg cells", f"{c['mass']:.2f}"),
-            ("avg neurons", f"{c['neurons']:.1f}"),
+            ("avg hidden neurons", f"{c.get('hidden_neurons', 0):.1f}"),
             ("avg synapses", f"{c['synapses']:.1f}"),
             ("avg energy", f"{c['energy']:.0f}"),
             ("largest body", f"{c['top_mass']} cells"),
-            ("largest brain", f"{c['top_neurons']} neurons"),
+            ("largest brain (hidden)", f"{c.get('top_hidden_neurons', 0)} neurons"),
             ("oldest", f"{c['top_age']} ticks"),
             ("weather", c["event"] or "calm"),
             ("compat threshold", f"{cfg.compat_threshold:.2f}"),

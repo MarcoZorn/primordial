@@ -73,8 +73,9 @@ def render(rows, run):
         f"| species | {now.get('species', '-')} |",
         f"| mean cells per body | {now['mass']:.2f} |",
         f"| largest body | {now['top_mass']} cells |",
-        f"| mean neurons | {now['neurons']:.1f} |",
-        f"| largest brain | {now['top_neurons']} neurons |",
+        f"| mean hidden neurons | {now.get('hidden_neurons', 0):.1f} |",
+        f"| largest brain (hidden) | {now.get('top_hidden_neurons', 0)} neurons |",
+        f"| genome size incl. reserved slots | {now['top_neurons']} |",
         f"| deepest lineage | {now['depth']} generations |",
         f"| oldest living | {now['top_age']:,} ticks |",
         f"| carrion | {now.get('corpses', 0):,} |",
@@ -104,15 +105,15 @@ def render(rows, run):
         ("first 10-cell body", lambda r: r["top_mass"] >= 10),
         ("first 25-cell body", lambda r: r["top_mass"] >= 25),
         ("first animal", lambda r: r["animal"] > 0),
-        ("50+ neuron brain", lambda r: r["top_neurons"] >= 50),
-        ("100+ neuron brain", lambda r: r["top_neurons"] >= 100),
+        ("50+ hidden neurons", lambda r: r.get("top_hidden_neurons", 0) >= 50),
+        ("100+ hidden neurons", lambda r: r.get("top_hidden_neurons", 0) >= 100),
     ]
     for label, test in marks:
         t = first(rows, test)
         lines.append(f"| {label} | {'not yet' if t is None else f'{t:,}'} |")
 
     for key, title in (("pop", "population"), ("mass", "mean cells per body"),
-                       ("neurons", "mean neurons")):
+                       ("hidden_neurons", "mean hidden neurons")):
         lines += ["", f"### {title}", "", "```",
                   spark([r[key] for r in rows]), "```"]
 
