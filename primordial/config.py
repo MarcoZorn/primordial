@@ -48,8 +48,8 @@ class Config:
     # a brain is expensive tissue - roughly a fifth of a human's resting budget
     # goes to one. Without a price, networks bloat with neurons that do nothing
     # and the cost lands on the simulation instead of the organism.
-    neuron_cost: float = 0.0006
-    synapse_cost: float = 0.00008
+    neuron_cost: float = 0.00015
+    synapse_cost: float = 0.00002
     max_age: int = 5000          # baseline; each organism inherits its own jitter
     lifespan_jitter: float = 0.18
 
@@ -74,7 +74,7 @@ class Config:
     # only a fraction of what you drain becomes yours. Lindeman's law: real
     # food chains lose about 90% per trophic level, which is exactly what stops
     # predators from outnumbering the things they eat
-    bite_efficiency: float = 0.32
+    bite_efficiency: float = 0.40
     digest_cap: float = 0.75       # even a specialist gut cannot beat physics
     # carrion must never be worth more than what died, or death becomes an
     # energy source and the dish runs away
@@ -83,7 +83,7 @@ class Config:
     max_corpses: int = 900
     # predation is expensive to run, which is what stops a bloom of eaters
     # stripping the herbivore base down to nothing
-    eater_cost: float = 0.16       # extra upkeep per eater cell per tick
+    eater_cost: float = 0.11       # extra upkeep per eater cell per tick
 
     # sound: cheap, omnidirectional, works at night and past obstacles
     hearing: float = 460.0
@@ -106,8 +106,8 @@ class Config:
     p_recurrent: float = 0.25      # share of new connections allowed to loop back
     # duplication is how genomes actually get big; adding one neuron at a time
     # grows linearly and can never reach a large brain
-    p_duplicate: float = 0.05
-    duplicate_share: float = 0.25  # fraction of the hidden layer copied at once
+    p_duplicate: float = 0.11
+    duplicate_share: float = 0.35  # fraction of the hidden layer copied at once
     duplicate_jitter: float = 0.25
     # a fruit fly runs on about 135,000 neurons. That is the scale this is
     # aimed at, and it fits: such a brain evaluates in ~2.4 ms and its genome
@@ -127,7 +127,7 @@ class Config:
     segment_share: float = 0.5
     # an organism is born as a single cell and builds the rest as it can afford
     # it, so a large body is a life's work rather than an inheritance
-    grow_reserve: float = 0.55     # share of capacity kept back before growing
+    grow_reserve: float = 0.42     # share of capacity kept back before growing
     grow_every: int = 12           # ticks between growth steps
     p_cell_drop: float = 0.04
     p_trait: float = 0.12          # chance an expressed trait drifts
@@ -135,8 +135,8 @@ class Config:
     trait_step: float = 0.14
     trait_cap: float = 1.6
     trait_cost: float = 0.055      # upkeep per unit of capability, anywhere
-    size_capacity_bonus: float = 0.12  # intrinsic capacity gained per extra cell
-    bite_blinds: float = 0.9       # how fast predation shuts photosynthesis off
+    size_capacity_bonus: float = 0.35  # intrinsic capacity gained per extra cell
+    bite_blinds: float = 0.65      # how fast predation shuts photosynthesis off
     max_cells: int = 256
 
     # --- speciation (labels and colours only, selection is what it is) ---
