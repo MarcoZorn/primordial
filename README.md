@@ -4,14 +4,18 @@ An open-ended evolution sandbox. It starts with a dish of identical single
 cells and no goal, and you watch what shows up.
 
 There is no fitness function anywhere in this repository. Nothing is scored,
-ranked or bred by the simulation. An organism has one problem — stay solvent
-long enough to divide — and every structure you see on screen is something that
+ranked or bred by the simulation. An organism has one problem, stay solvent
+long enough to divide, and every structure you see on screen is something that
 problem paid for.
 
-**[→ Live status of the ongoing run](LIVE.md)** — regenerated from telemetry
+**[→ Live status of the ongoing run](LIVE.md)**, regenerated from telemetry
 while the run is going, not written by hand.
 
-![primordial](docs/screenshot.png)
+![primordial: organisms in the dish, and the evolved brain of the one being tracked](docs/demo.gif)
+
+<sub>Day 1245 of a live run. 1799 organisms, 28 species, lineage depth 637. The panel on
+the right is the actual neural network of the organism being followed: 144 hidden neurons
+and 859 synapses that nothing in this repository designed.</sub>
 
 ## What is actually being simulated
 
