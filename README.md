@@ -28,9 +28,9 @@ drop one, and the cell types decide what the organism can physically do:
 | cell | what it buys |
 |---|---|
 | `core` | feeds weakly on ambient light; every body has exactly one |
-| `photo` | photosynthesis — free energy, but it does not move |
+| `photo` | photosynthesis: free energy, but it does not move |
 | `mover` | speed and turning rate |
-| `eater` | reach and bite strength — lets it consume other organisms |
+| `eater` | reach and bite strength, lets it consume other organisms |
 | `sensor` | sight range |
 | `armor` | reduces damage taken when bitten |
 | `store` | energy capacity |
@@ -48,12 +48,12 @@ thruster, and the urge to divide.
 There is one organism type in the code. A clump that fills with `photo` cells
 and never grows a `mover` **is** a plant. One that grows movers and eaters is
 an animal, and it can only survive by eating things that are evolving not to be
-eaten. The kingdom label in the UI is read off the body after the fact — nothing
+eaten. The kingdom label in the UI is read off the body after the fact; nothing
 in the simulation branches on it.
 
 ### Light is local and exhaustible
 
-All energy enters the world as light, and light is not a background constant —
+All energy enters the world as light, and light is not a background constant,
 it is a resource sitting on the ground in patches. Feeding draws the patch you
 are standing on down, and it recovers slowly. A patch supports one sessile
 organism for around 1,600 ticks and eight of them for around 200.
@@ -62,7 +62,7 @@ This is the single most important rule in the simulation, because it is what
 makes a brain worth having. Without depletion the best possible strategy is to
 sit in the brightest spot and divide, which requires no perception, no
 movement, and no thought. With it, staying alive means finding ground that has
-not been grazed — which means moving, sensing a gradient, and comparing what is
+not been grazed, which means moving, sensing a gradient, and comparing what is
 underfoot now with what it was a moment ago. That last part needs memory, and
 memory is what recurrent connections are for.
 
@@ -102,7 +102,7 @@ organisms, same innovation numbers, same random stream. Stopping it with a
 signal makes it checkpoint before exiting, so pausing a run is safe.
 
 The window sizes itself to your display. Press the `speed` button a couple of
-times — real change takes tens of thousands of ticks.
+times; real change takes tens of thousands of ticks.
 
 | control | |
 |---|---|
@@ -114,7 +114,7 @@ times — real change takes tens of thousands of ticks.
 | click | select an organism and watch its brain fire |
 | `tab` | jump to the largest organism alive |
 | `c` | follow the selection |
-| `g` | global stats — full cell census, largest body, largest brain |
+| `g` | global stats: full cell census, largest body, largest brain |
 | `[` `]`, `A-` `A+` | UI text size |
 | `F11` | fullscreen |
 | `s` | save the selected genome to `runs/` |
@@ -128,7 +128,7 @@ actual body plan that evolution arrived at.
 The brain panel draws the selected organism's network live. Orange is
 excitation, blue is inhibition, node size is firing strength, and every line is
 a synapse coloured by the signal currently crossing it. Neurons in the middle
-columns did not exist at the start of the run — they were inserted by mutation.
+columns did not exist at the start of the run; they were inserted by mutation.
 
 ## Layout
 
